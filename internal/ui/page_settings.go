@@ -35,21 +35,23 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		presetIDs = append(presetIDs, id)
 	}
 	sort.Strings(presetIDs)
+
 	presetLabels := make([]string, 0, len(presetIDs))
 	presetIndex := 0
 	for i, id := range presetIDs {
-		pr := w.cat.Presets[id]
-		presetLabels = append(presetLabels, pr.Title)
+		p := w.cat.Presets[id]
+		presetLabels = append(presetLabels, p.Title)
 		if id == w.p.Preset {
 			presetIndex = i
 		}
 	}
 
-	form.AddDropDown("Preset", presetLabels, presetIndex, func(option string, index int) {
+	form.AddDropDown("Preset", presetLabels, presetIndex, func(_ string, index int) {
 		if index < 0 || index >= len(presetIDs) {
 			return
 		}
-		w.applyPreset(presetIDs[index])
+		id := presetIDs[index]
+		w.applyPreset(id)
 		w.updateSettingsInfo()
 	})
 
@@ -58,7 +60,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 	if w.p.ConfigMode == "integrate" {
 		modeIndex = 1
 	}
-	form.AddDropDown("Config mode", modeLabels, modeIndex, func(option string, index int) {
+	form.AddDropDown("Config mode", modeLabels, modeIndex, func(_ string, index int) {
 		if index == 1 {
 			w.p.ConfigMode = "integrate"
 		} else {
@@ -67,16 +69,17 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		w.updateSettingsInfo()
 	})
 
-	form.AddInputField("Projects dir", w.p.ProjectsDir, 0, nil, func(text string) {
+	fieldWidth := 24
+	form.AddInputField("Projects dir", w.p.ProjectsDir, fieldWidth, nil, func(text string) {
 		w.p.ProjectsDir = strings.TrimSpace(text)
 		w.updateSettingsInfo()
 	})
 
-	form.AddInputField("Leader", w.p.Leader, 5, nil, func(text string) {
+	form.AddInputField("Leader", w.p.Leader, fieldWidth, nil, func(text string) {
 		w.p.Leader = text
 		w.updateSettingsInfo()
 	})
-	form.AddInputField("Local leader", w.p.LocalLeader, 5, nil, func(text string) {
+	form.AddInputField("Local leader", w.p.LocalLeader, fieldWidth, nil, func(text string) {
 		w.p.LocalLeader = text
 		w.updateSettingsInfo()
 	})
@@ -86,10 +89,9 @@ func (w *Wizard) pageSettings() tview.Primitive {
 	for i, v := range verifyLabels {
 		if v == w.p.Verify {
 			verifyIndex = i
-			break
 		}
 	}
-	form.AddDropDown("Verify", verifyLabels, verifyIndex, func(option string, index int) {
+	form.AddDropDown("Verify", verifyLabels, verifyIndex, func(_ string, index int) {
 		if index >= 0 && index < len(verifyLabels) {
 			w.p.Verify = verifyLabels[index]
 		}
@@ -103,7 +105,6 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		_ = profile.Save(w.p)
 		w.gotoPage("features")
 	})
-
 	form.SetButtonsAlign(tview.AlignCenter)
 
 	w.updateSettingsInfo()
@@ -123,6 +124,7 @@ func (w *Wizard) systemInfoView() tview.Primitive {
 	tv.SetDynamicColors(true)
 	tv.SetBorder(true)
 	tv.SetTitle("System")
+
 	lines := []string{}
 	if w.envNote != "" {
 		lines = append(lines, w.envNote)
@@ -133,14 +135,17 @@ func (w *Wizard) systemInfoView() tview.Primitive {
 		lines = append(lines, "OS: "+w.sys.GOOS)
 	}
 	lines = append(lines, "Arch: "+w.sys.GOARCH)
+
 	if w.sys.WSL {
 		lines = append(lines, "WSL: yes")
 	} else {
 		lines = append(lines, "WSL: no")
 	}
+
 	if len(w.sys.PackageManagers) > 0 {
 		lines = append(lines, "Package managers: "+strings.Join(w.sys.PackageManagers, ", "))
 	}
+
 	tnames := []string{"nvim", "rg", "fd", "git", "curl", "tar", "sha256sum"}
 	for _, k := range tnames {
 		ti := w.sys.Tools[k]
@@ -154,6 +159,7 @@ func (w *Wizard) systemInfoView() tview.Primitive {
 			lines = append(lines, k+": missing")
 		}
 	}
+
 	tv.SetText(strings.Join(lines, "\n"))
 	return tv
 }
@@ -162,32 +168,35 @@ func (w *Wizard) updateSettingsInfo() {
 	if w.settingsInfo == nil {
 		return
 	}
-	pr, ok := w.cat.Presets[w.p.Preset]
+
+	p, ok := w.cat.Presets[w.p.Preset]
 	presetLine := w.p.Preset
 	short := ""
 	if ok {
-		presetLine = pr.Title
-		short = pr.Short
+		presetLine = p.Title
+		short = p.Short
 	}
-	lines := []string{
-		"Preset: " + presetLine,
-	}
+
+	lines := []string{"Preset: " + presetLine}
 	if short != "" {
 		lines = append(lines, short)
 	}
+
 	lines = append(lines, "")
 	lines = append(lines, "Config mode: "+w.p.ConfigMode)
 	if w.p.ConfigMode == "integrate" {
-		lines = append(lines, "Integrate: require nvimwiz.loader from your init.lua")
+		lines = append(lines, "Integrate means you must require nvimwiz.loader from your own init.lua")
 	} else {
-		lines = append(lines, "Managed: nvimwiz writes ~/.config/nvim/init.lua")
+		lines = append(lines, "Managed means nvimwiz writes ~/.config/nvim/init.lua")
 	}
+
 	lines = append(lines, "")
 	lines = append(lines, "Verify downloads: "+w.p.Verify)
 	lines = append(lines, "")
 	lines = append(lines, "Projects dir: "+w.p.ProjectsDir)
 	lines = append(lines, "Leader: "+encodeKeyForUI(w.p.Leader))
 	lines = append(lines, "Local leader: "+encodeKeyForUI(w.p.LocalLeader))
+
 	w.settingsInfo.SetText(strings.Join(lines, "\n"))
 }
 

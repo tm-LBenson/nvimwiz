@@ -39,6 +39,9 @@ type Wizard struct {
 	featureTable *tview.Table
 	detailView   *tview.TextView
 
+	actionDropDown *tview.DropDown
+	actionLabel    *tview.TextView
+
 	currentCategory string
 	rowItems        []itemRef
 
@@ -95,9 +98,4 @@ func (w *Wizard) gotoPage(name string) {
 		w.renderSummary()
 	}
 	w.pages.SwitchToPage(name)
-	if name == "features" {
-		if w.featureTable != nil {
-			w.app.SetFocus(w.featureTable)
-		}
-	}
 }

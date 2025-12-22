@@ -41,26 +41,25 @@ func (w *Wizard) renderSummary() {
 	if w.summaryView == nil {
 		return
 	}
+
 	w.taskPlan = tasks.Plan(w.p, w.cat)
+
 	lines := []string{}
 	lines = append(lines, "Preset: "+w.p.Preset)
 	lines = append(lines, "Config mode: "+w.p.ConfigMode)
 	lines = append(lines, "Verify: "+w.p.Verify)
 	lines = append(lines, "Projects dir: "+w.p.ProjectsDir)
 	lines = append(lines, "")
+
 	lines = append(lines, "Choices:")
-	keys := make([]string, 0, len(w.p.Choices))
-	for k := range w.p.Choices {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
+	for _, k := range []string{"ui.explorer", "ui.theme", "ui.statusline"} {
 		v := w.p.Choices[k]
 		if v == "" {
 			continue
 		}
 		lines = append(lines, fmt.Sprintf(" - %s = %s", k, v))
 	}
+
 	lines = append(lines, "")
 	lines = append(lines, "Enabled features:")
 	fids := []string{}
@@ -73,10 +72,12 @@ func (w *Wizard) renderSummary() {
 	for _, id := range fids {
 		lines = append(lines, " - "+id)
 	}
+
 	lines = append(lines, "")
 	lines = append(lines, "Plan:")
 	for _, t := range w.taskPlan {
 		lines = append(lines, " - "+t.Name)
 	}
+
 	w.summaryView.SetText(strings.Join(lines, "\n"))
 }
