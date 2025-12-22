@@ -5,67 +5,107 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"time"
+	"strings"
+
+	"nvimwiz/internal/catalog"
 )
 
 const CurrentVersion = 1
 
-// Profile is the persisted state of the wizard.
-//
-// Design goals:
-//   - Backwards compatible (Versioned)
-//   - Human readable (pretty-printed JSON)
-//   - Safe defaults
-//
-// NOTE: We keep it fairly flat for now. If we grow beyond this, we can
-// move to a "features" map without breaking older profiles.
 type Profile struct {
-	Version int `json:"version"`
-
-	ProjectsDir  string `json:"projectsDir"`
-	Leader       string `json:"leader"`
-	LocalLeader  string `json:"localLeader"`
-	ConfigMode   string `json:"configMode"` // "managed" or "integrate"
-	LastModified string `json:"lastModified"`
-
-	InstallNeovim   bool `json:"installNeovim"`
-	InstallRipgrep  bool `json:"installRipgrep"`
-	InstallFd       bool `json:"installFd"`
-	WriteNvimConfig bool `json:"writeNvimConfig"`
-
-	EnableTree      bool `json:"enableTree"`
-	EnableTelescope bool `json:"enableTelescope"`
-	EnableLSP       bool `json:"enableLSP"`
-	EnableJava      bool `json:"enableJava"`
-
-	RunLazySync      bool `json:"runLazySync"`
-	RequireChecksums bool `json:"requireChecksums"`
+	Version     int               `json:"version"`
+	Preset      string            `json:"preset"`
+	ProjectsDir string            `json:"projectsDir"`
+	Leader      string            `json:"leader"`
+	LocalLeader string            `json:"localLeader"`
+	ConfigMode  string            `json:"configMode"`
+	Verify      string            `json:"verify"`
+	Features    map[string]bool   `json:"features"`
+	Choices     map[string]string `json:"choices"`
 }
 
-func Default() Profile {
-	return Profile{
-		Version:         CurrentVersion,
-		ProjectsDir:     "~/projects",
-		Leader:          " ",
-		LocalLeader:     " ",
-		ConfigMode:      "managed",
-		InstallNeovim:   true,
-		InstallRipgrep:  true,
-		InstallFd:       true,
-		WriteNvimConfig: true,
-		EnableTree:      true,
-		EnableTelescope: true,
-		EnableLSP:       true,
-		EnableJava:      false,
-		RunLazySync:     true,
+func Path() (string, error) {
+	if v := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); v != "" {
+		return filepath.Join(v, "nvimwiz", "profile.json"), nil
 	}
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(h, ".config", "nvimwiz", "profile.json"), nil
 }
 
-func (p *Profile) Normalize() {
+func Load(cat catalog.Catalog) (Profile, bool, error) {
+	pth, err := Path()
+	if err != nil {
+		return Profile{}, false, err
+	}
+	b, err := os.ReadFile(pth)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			p := Default(cat)
+			return p, false, nil
+		}
+		return Profile{}, false, err
+	}
+	var p Profile
+	if err := json.Unmarshal(b, &p); err != nil {
+		p = Default(cat)
+		return p, true, nil
+	}
+	p.Normalize(cat)
+	return p, true, nil
+}
+
+func Save(p Profile) error {
+	pth, err := Path()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(pth)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return err
+	}
+	b = append(b, '\n')
+	return os.WriteFile(pth, b, 0o644)
+}
+
+func Default(cat catalog.Catalog) Profile {
+	p := Profile{
+		Version:     CurrentVersion,
+		Preset:      "lazyvim",
+		ProjectsDir: "~/projects",
+		Leader:      " ",
+		LocalLeader: " ",
+		ConfigMode:  "managed",
+		Verify:      "auto",
+		Features:    map[string]bool{},
+		Choices:     map[string]string{},
+	}
+	if pr, ok := cat.Presets[p.Preset]; ok {
+		for fid, v := range pr.Features {
+			p.Features[fid] = v
+		}
+		for ck, cv := range pr.Choices {
+			p.Choices[ck] = cv
+		}
+	}
+	p.Normalize(cat)
+	return p
+}
+
+func (p *Profile) Normalize(cat catalog.Catalog) {
 	if p.Version == 0 {
 		p.Version = CurrentVersion
 	}
-	if p.ProjectsDir == "" {
+	if strings.TrimSpace(p.Preset) == "" {
+		p.Preset = "lazyvim"
+	}
+	if strings.TrimSpace(p.ProjectsDir) == "" {
 		p.ProjectsDir = "~/projects"
 	}
 	if p.Leader == "" {
@@ -74,74 +114,59 @@ func (p *Profile) Normalize() {
 	if p.LocalLeader == "" {
 		p.LocalLeader = " "
 	}
-	if p.ConfigMode == "" {
-		p.ConfigMode = "managed"
+	m := strings.ToLower(strings.TrimSpace(p.ConfigMode))
+	if m != "integrate" {
+		m = "managed"
 	}
-	if p.ConfigMode != "managed" && p.ConfigMode != "integrate" {
-		p.ConfigMode = "managed"
-	}
-}
+	p.ConfigMode = m
 
-func ConfigDir() (string, error) {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "nvimwiz"), nil
+	v := strings.ToLower(strings.TrimSpace(p.Verify))
+	if v != "require" && v != "off" {
+		v = "auto"
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".config", "nvimwiz"), nil
-}
+	p.Verify = v
 
-func ProfilePath() (string, error) {
-	dir, err := ConfigDir()
-	if err != nil {
-		return "", err
+	if p.Features == nil {
+		p.Features = map[string]bool{}
 	}
-	return filepath.Join(dir, "profile.json"), nil
-}
+	if p.Choices == nil {
+		p.Choices = map[string]string{}
+	}
 
-// Load returns the profile, whether it existed, and an error if something went wrong.
-func Load() (Profile, bool, error) {
-	path, err := ProfilePath()
-	if err != nil {
-		return Profile{}, false, err
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			p := Default()
-			p.Normalize()
-			return p, false, nil
+	for id, f := range cat.Features {
+		if _, ok := p.Features[id]; !ok {
+			p.Features[id] = f.Default
 		}
-		return Profile{}, false, err
 	}
 
-	var p Profile
-	if err := json.Unmarshal(b, &p); err != nil {
-		return Profile{}, true, err
-	}
-	p.Normalize()
-	return p, true, nil
-}
-
-func Save(p Profile) error {
-	p.Normalize()
-	p.Version = CurrentVersion
-	p.LastModified = time.Now().Format(time.RFC3339)
-
-	path, err := ProfilePath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+	for key, ch := range cat.Choices {
+		if _, ok := p.Choices[key]; !ok {
+			p.Choices[key] = ch.Default
+		} else {
+			cur := p.Choices[key]
+			valid := false
+			for _, opt := range ch.Options {
+				if opt.ID == cur {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				p.Choices[key] = ch.Default
+			}
+		}
 	}
 
-	b, err := json.MarshalIndent(p, "", "  ")
-	if err != nil {
-		return err
+	for id, enabled := range p.Features {
+		if !enabled {
+			continue
+		}
+		f, ok := cat.Features[id]
+		if !ok {
+			continue
+		}
+		for _, req := range f.Requires {
+			p.Features[req] = true
+		}
 	}
-	b = append(b, '\n')
-	return os.WriteFile(path, b, 0o644)
 }

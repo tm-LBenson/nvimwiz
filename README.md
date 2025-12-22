@@ -1,47 +1,59 @@
-# nvimwiz
+# nvimwiz (refactor)
 
-A small Go + tview wizard that can:
-
-- detect basic system info & tool availability
-- optionally install user-local binaries (Neovim, ripgrep, fd) from GitHub releases
-- manage a Neovim IDE config via generated modules + safe user overrides
-- persist your choices so you can rerun it later
+A TUI wizard that installs Neovim + a few CLI tools (user-local) and writes a modular Neovim config driven by a profile JSON.
 
 ## Build
 
-From the project root (the folder with `go.mod`):
+```bash
+./build.sh
+```
+
+Or:
 
 ```bash
-go mod tidy
+go mod download
 go build -o nvimwiz ./cmd/nvimwiz
+```
+
+## Run
+
+```bash
 ./nvimwiz
 ```
 
-## What gets written
+The wizard stores its profile at:
 
-### Profile
+- `$XDG_CONFIG_HOME/nvimwiz/profile.json` (if set)
+- otherwise `~/.config/nvimwiz/profile.json`
 
-- `~/.config/nvimwiz/profile.json` (or `$XDG_CONFIG_HOME/nvimwiz/profile.json`)
+## What it changes
 
-### Neovim config (managed)
-
-nvimwiz writes a small loader plus generated modules:
-
-- `~/.config/nvim/init.lua` (managed stub, optional)
-- `~/.config/nvim/lua/nvimwiz/loader.lua`
-- `~/.config/nvim/lua/nvimwiz/generated/*.lua`
-- `~/.config/nvim/lua/nvimwiz/user.lua` (never overwritten)
+- Installs binaries to `~/.local/bin` (symlink for Neovim points into `~/.local/nvim/<tag>/bin/nvim`)
+- Writes Neovim config to `~/.config/nvim`
+- Generated settings live at `~/.config/nvim/lua/nvimwiz/generated/config.lua`
+- Safe user override file: `~/.config/nvim/lua/nvimwiz/user.lua` (never overwritten if it already exists)
 
 ## Config modes
 
-- **Managed**: nvimwiz writes `init.lua` (backs up your existing `init.lua` if it's not already managed).
-- **Integrate**: nvimwiz does *not* touch `init.lua`. You add one line to your existing config:
+- **managed**: writes `~/.config/nvim/init.lua` that loads `nvimwiz.loader`
+- **integrate**: does not touch your `init.lua`. Add this yourself:
 
 ```lua
 require("nvimwiz.loader")
 ```
 
-## Notes
+## Adding a new feature/module
 
-- Installs binaries into `~/.local/bin` and `~/.local/nvim/...`
-- nvimwiz updates `PATH` for the running wizard process so follow-up steps work without restarting.
+1. Create a module under `assets/nvim/lua/nvimwiz/modules/...` that exports either:
+   - `spec()` returning a lazy.nvim spec list, and/or
+   - `setup()` for non-plugin runtime setup
+2. Register it in `internal/catalog/catalog.go` by adding:
+   - a `Feature` (toggle) or
+   - a `Choice` option
+
+That is all. The wizard UI and config generator use the catalog as the single source of truth.
+
+## Presets
+
+Presets are “starting points” (Kickstart-like, LazyVim-like, AstroNvim-like, NvChad-like, LunarVim-like). They map onto this wizard’s feature/choice set and are not a copy of those projects.
+
