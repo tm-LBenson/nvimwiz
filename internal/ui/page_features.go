@@ -16,18 +16,6 @@ func (w *Wizard) pageFeatures() tview.Primitive {
 	w.categoryList.SetBorder(true)
 	w.categoryList.SetTitle("Category")
 
-	for _, c := range w.cat.Categories {
-		w.categoryList.AddItem(c, "", 0, nil)
-	}
-
-	w.categoryList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		if index < 0 || index >= len(w.cat.Categories) {
-			return
-		}
-		w.currentCategory = w.cat.Categories[index]
-		w.renderFeatureTable()
-	})
-
 	w.featureTable = tview.NewTable()
 	w.featureTable.SetBorder(true)
 	w.featureTable.SetTitle("Features")
@@ -38,14 +26,26 @@ func (w *Wizard) pageFeatures() tview.Primitive {
 	w.detailView.SetDynamicColors(true)
 	w.detailView.SetBorder(true)
 	w.detailView.SetTitle("Details")
-	w.detailView.SetText("Space toggles a feature. Enter selects. Use the [ ? ] button or press ? for more detail.")
+	w.detailView.SetText("Select a row. Space or Enter toggles. Tab changes focus. Select [ ? ] for more details.")
 
-	help := tview.NewTextView()
-	help.SetDynamicColors(true)
-	help.SetTextAlign(tview.AlignLeft)
-	help.SetBorder(true)
-	help.SetTitle("Help")
-	help.SetText("↑↓ move  ←→ columns  Space toggle  Enter select  ? detail  Tab next pane  Ctrl+C quit")
+	helpBar := tview.NewTextView()
+	helpBar.SetDynamicColors(true)
+	helpBar.SetBorder(true)
+	helpBar.SetTitle("Help")
+	helpBar.SetText("Up/Down: move   Tab: switch pane   Space/Enter: toggle or choose   Left/Right: move columns   [ ? ]: details")
+
+	for _, c := range w.cat.Categories {
+		cat := c
+		w.categoryList.AddItem(cat, "", 0, nil)
+	}
+
+	w.categoryList.SetChangedFunc(func(_ int, mainText string, _ string, _ rune) {
+		if mainText == "" {
+			return
+		}
+		w.currentCategory = mainText
+		w.renderFeatureTable()
+	})
 
 	w.featureTable.SetSelectionChangedFunc(func(row, col int) {
 		if row <= 0 || row-1 >= len(w.rowItems) {
@@ -66,29 +66,39 @@ func (w *Wizard) pageFeatures() tview.Primitive {
 			w.updateDetail(it, true)
 			return
 		}
-		if it.Kind == itemFeature {
+		switch it.Kind {
+		case itemFeature:
 			w.toggleFeature(it.ID)
 			w.renderFeatureTable()
-			return
-		}
-		if it.Kind == itemChoice {
+		case itemChoice:
 			w.pickChoice(it.ID)
-			return
 		}
 	})
 
 	w.featureTable.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
 		if ev.Key() == tcell.KeyRune && ev.Rune() == ' ' {
-			r, _ := w.featureTable.GetSelection()
+			r, c := w.featureTable.GetSelection()
 			if r > 0 && r-1 < len(w.rowItems) {
 				it := w.rowItems[r-1]
+				if c == 2 {
+					w.updateDetail(it, true)
+					return nil
+				}
 				if it.Kind == itemFeature {
 					w.toggleFeature(it.ID)
 					w.renderFeatureTable()
+					return nil
 				}
 				if it.Kind == itemChoice {
 					w.pickChoice(it.ID)
+					return nil
 				}
+			}
+		}
+		if ev.Key() == tcell.KeyRune && ev.Rune() == '?' {
+			r, _ := w.featureTable.GetSelection()
+			if r > 0 && r-1 < len(w.rowItems) {
+				w.updateDetail(w.rowItems[r-1], true)
 				return nil
 			}
 		}
@@ -97,9 +107,9 @@ func (w *Wizard) pageFeatures() tview.Primitive {
 
 	if len(w.cat.Categories) > 0 {
 		w.currentCategory = w.cat.Categories[0]
+		w.categoryList.SetCurrentItem(0)
 	}
 	w.renderFeatureTable()
-	w.categoryList.SetCurrentItem(0)
 
 	main := tview.NewFlex()
 	main.AddItem(w.categoryList, 0, 1, true)
@@ -117,35 +127,29 @@ func (w *Wizard) pageFeatures() tview.Primitive {
 	buttons.AddButton("Quit", func() { w.app.Stop() })
 	buttons.SetButtonsAlign(tview.AlignCenter)
 
-	wrap := tview.NewFlex().SetDirection(tview.FlexRow)
-	wrap.AddItem(main, 0, 1, true)
-	wrap.AddItem(help, 3, 0, false)
-	wrap.AddItem(buttons, 3, 0, true)
+	root := tview.NewFlex().SetDirection(tview.FlexRow)
+	root.AddItem(main, 0, 1, true)
+	root.AddItem(helpBar, 3, 0, false)
+	root.AddItem(buttons, 3, 0, true)
 
-	wrap.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
-		if ev.Key() == tcell.KeyTAB {
-			focus := w.app.GetFocus()
-			order := []tview.Primitive{w.featureTable, w.categoryList, w.detailView, buttons}
-			for i, p := range order {
-				if focus == p {
-					w.app.SetFocus(order[(i+1)%len(order)])
-					return nil
+	focusOrder := []tview.Primitive{w.categoryList, w.featureTable, w.detailView}
+	root.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		if ev.Key() == tcell.KeyTab {
+			cur := w.app.GetFocus()
+			next := 0
+			for i, p := range focusOrder {
+				if p == cur {
+					next = (i + 1) % len(focusOrder)
+					break
 				}
 			}
-			w.app.SetFocus(order[0])
+			w.app.SetFocus(focusOrder[next])
 			return nil
-		}
-		if ev.Key() == tcell.KeyRune && ev.Rune() == '?' {
-			r, _ := w.featureTable.GetSelection()
-			if r > 0 && r-1 < len(w.rowItems) {
-				w.updateDetail(w.rowItems[r-1], true)
-				return nil
-			}
 		}
 		return ev
 	})
 
-	return wrap
+	return root
 }
 
 func (w *Wizard) renderFeatureTable() {
@@ -174,9 +178,9 @@ func (w *Wizard) renderFeatureTable() {
 	}
 
 	sort.Slice(items, func(i, j int) bool {
-		at := strings.ToLower(w.itemTitle(items[i]))
-		bt := strings.ToLower(w.itemTitle(items[j]))
-		return at < bt
+		at := w.itemTitle(items[i])
+		bt := w.itemTitle(items[j])
+		return strings.ToLower(at) < strings.ToLower(bt)
 	})
 
 	w.rowItems = items
@@ -185,17 +189,16 @@ func (w *Wizard) renderFeatureTable() {
 		state := w.itemState(it)
 		name := w.itemTitle(it)
 
-		sc := tview.NewTableCell(state)
-		sc.SetAlign(tview.AlignCenter)
-		w.featureTable.SetCell(row, 0, sc)
+		stateCell := tview.NewTableCell(state)
+		stateCell.SetAlign(tview.AlignCenter)
+		w.featureTable.SetCell(row, 0, stateCell)
 
 		w.featureTable.SetCell(row, 1, tview.NewTableCell(name))
 
-		ic := tview.NewTableCell(tview.Escape("[ ? ]"))
-		ic.SetAlign(tview.AlignCenter)
-		ic.SetTextColor(tcell.ColorBlack)
-		ic.SetBackgroundColor(tcell.ColorWhite)
-		w.featureTable.SetCell(row, 2, ic)
+		infoCell := tview.NewTableCell(" ? ")
+		infoCell.SetAlign(tview.AlignCenter)
+		infoCell.SetAttributes(tcell.AttrReverse)
+		w.featureTable.SetCell(row, 2, infoCell)
 	}
 
 	if len(items) > 0 {
@@ -254,13 +257,15 @@ func findChoiceOption(ch catalog.Choice, id string) (catalog.ChoiceOption, bool)
 }
 
 func (w *Wizard) updateDetail(it itemRef, long bool) {
+	lines := []string{}
 	if it.Kind == itemFeature {
 		f, ok := w.cat.Features[it.ID]
 		if !ok {
 			w.detailView.SetText(it.ID)
 			return
 		}
-		lines := []string{f.Title, ""}
+		lines = append(lines, f.Title)
+		lines = append(lines, "")
 		if long {
 			lines = append(lines, f.Long)
 		} else {
@@ -279,7 +284,8 @@ func (w *Wizard) updateDetail(it itemRef, long bool) {
 			w.detailView.SetText(it.ID)
 			return
 		}
-		lines := []string{c.Title, ""}
+		lines = append(lines, c.Title)
+		lines = append(lines, "")
 		if long {
 			lines = append(lines, c.Long)
 		} else {
@@ -291,7 +297,6 @@ func (w *Wizard) updateDetail(it itemRef, long bool) {
 			lines = append(lines, " - "+opt.Title+" ("+opt.ID+")")
 		}
 		w.detailView.SetText(strings.Join(lines, "\n"))
-		return
 	}
 }
 
@@ -312,10 +317,11 @@ func (w *Wizard) pickChoice(key string) {
 		buttons = append(buttons, opt.Title)
 		optByButton[opt.Title] = opt.ID
 	}
+
 	modal := tview.NewModal()
 	modal.SetText(ch.Title)
 	modal.AddButtons(buttons)
-	modal.SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+	modal.SetDoneFunc(func(_ int, buttonLabel string) {
 		if id, ok := optByButton[buttonLabel]; ok {
 			w.p.Choices[key] = id
 			w.p.Normalize(w.cat)

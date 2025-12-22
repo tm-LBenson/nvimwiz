@@ -15,12 +15,9 @@ func (w *Wizard) pageApply() tview.Primitive {
 	w.logView = tview.NewTextView()
 	w.logView.SetDynamicColors(true)
 	w.logView.SetScrollable(true)
+	w.logView.SetChangedFunc(func() { w.app.Draw() })
 	w.logView.SetBorder(true)
 	w.logView.SetTitle("Run")
-	w.logView.SetChangedFunc(func() {
-		w.logView.ScrollToEnd()
-		w.app.Draw()
-	})
 
 	w.progressView = tview.NewTextView()
 	w.progressView.SetBorder(true)
@@ -43,7 +40,8 @@ func (w *Wizard) startApply() {
 	w.progressView.SetText("")
 	w.taskPlan = tasks.Plan(w.p, w.cat)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	_ = cancel
 
 	logFn := func(msg string) {
 		w.app.QueueUpdateDraw(func() {
@@ -71,7 +69,7 @@ func (w *Wizard) startApply() {
 				fmt.Fprintln(w.logView, "Done in "+dur.String())
 				if w.p.ConfigMode == "integrate" {
 					fmt.Fprintln(w.logView, "")
-					fmt.Fprintln(w.logView, "Integrate: add require(\"nvimwiz.loader\") to your init.lua")
+					fmt.Fprintln(w.logView, "Integrate mode: add require(\"nvimwiz.loader\") to your init.lua")
 				}
 			}
 			w.logView.ScrollToEnd()
