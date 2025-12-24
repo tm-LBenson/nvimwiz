@@ -73,6 +73,8 @@ func Get() Catalog {
 		{ID: "qol.autopairs", Category: "Extras", Title: "Autopairs", Short: "Auto-close brackets/quotes", Long: "Adds autopairs for bracket/quote pairing", Default: true, Modules: []string{"nvimwiz.modules.extras.autopairs"}},
 		{ID: "qol.whichkey", Category: "Extras", Title: "Which-key", Short: "Keymap helper popup", Long: "Adds which-key to help discover keymaps", Default: false, Modules: []string{"nvimwiz.modules.extras.whichkey"}},
 		{ID: "qol.comment", Category: "Extras", Title: "Comment", Short: "Toggle comments easily", Long: "Adds comment.nvim for quick commenting", Default: false, Modules: []string{"nvimwiz.modules.extras.comment"}},
+		{ID: "qol.harpoon", Category: "Extras", Title: "Harpoon", Short: "Quick file marks + jump list", Long: "Adds Harpoon for fast file bookmarking and jumping", Default: false, Modules: []string{"nvimwiz.modules.extras.harpoon"}},
+		{ID: "qol.terminal", Category: "Extras", Title: "Terminal", Short: "Toggle a bottom terminal", Long: "Adds a toggleable terminal split (like VS Code integrated terminal)", Default: false, Modules: []string{"nvimwiz.modules.extras.terminal"}},
 	}
 
 	choices := []Choice{
@@ -100,6 +102,9 @@ func Get() Catalog {
 				{ID: "tokyonight", Title: "Tokyo Night", Short: "tokyonight", Long: "tokyonight colorscheme", Modules: []string{"nvimwiz.modules.ui.theme_tokyonight"}},
 				{ID: "catppuccin", Title: "Catppuccin", Short: "catppuccin", Long: "catppuccin colorscheme", Modules: []string{"nvimwiz.modules.ui.theme_catppuccin"}},
 				{ID: "gruvbox", Title: "Gruvbox", Short: "gruvbox", Long: "gruvbox colorscheme", Modules: []string{"nvimwiz.modules.ui.theme_gruvbox"}},
+				{ID: "github_dark", Title: "GitHub Dark", Short: "GitHub dark theme", Long: "GitHub Dark (similar to GitHub UI)", Modules: []string{"nvimwiz.modules.ui.theme_github"}},
+				{ID: "rose_pine", Title: "Rose Pine", Short: "Soft pink/purple theme", Long: "Rose Pine (calm, muted colors)", Modules: []string{"nvimwiz.modules.ui.theme_rose_pine"}},
+				{ID: "kanagawa", Title: "Kanagawa", Short: "Japanese ink-inspired theme", Long: "Kanagawa (high quality dark theme)", Modules: []string{"nvimwiz.modules.ui.theme_kanagawa"}},
 				{ID: "none", Title: "None", Short: "default", Long: "Do not set a colorscheme", Modules: nil},
 			},
 		},

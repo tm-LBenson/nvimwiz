@@ -579,6 +579,10 @@ func beginnerNote(id, title string) string {
 		return "Mason installs language servers and dev tools (like TypeScript/Go/Python servers) so Neovim can provide IDE features."
 	case strings.Contains(low, "nvim-tree") || strings.Contains(low, "file tree") || strings.Contains(low, "tree"):
 		return "A file explorer sidebar (like VS Code). Useful if you prefer browsing folders visually."
+	case strings.Contains(low, "harpoon"):
+		return "Harpoon is a fast \"bookmark\" system for files. Mark a few files and jump between them instantly.\n\nKeys: <leader>ha add, <leader>hm menu, <leader>h1..h4 jump."
+	case strings.Contains(low, "toggleterm") || strings.Contains(low, "terminal"):
+		return "Adds an integrated terminal you can toggle from Neovim (bottom split), similar to VS Code's terminal.\n\nKey: <leader>tt toggles. In terminal mode, press <esc><esc> to return to normal mode."
 	case strings.Contains(low, "ripgrep") || strings.Contains(low, " rg"):
 		return "ripgrep (rg) is a very fast search tool. Many Neovim search features use it under the hood.\n\nInstall/Update will only download if you are missing rg or are not on the latest release."
 	case strings.Contains(low, "fd"):
