@@ -3,6 +3,7 @@ package tasks
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 
@@ -79,6 +80,8 @@ func Plan(p profile.Profile, cat catalog.Catalog) []Task {
 		})
 	}
 
+	// This is safe to run for both default and safe builds.
+	// For safe builds we MUST set NVIM_APPNAME so Neovim uses the correct config/runtimepath.
 	if p.Features["config.lazysync"] && p.Features["config.write"] {
 		plan = append(plan, Task{
 			Name: "Sync plugins",
@@ -99,7 +102,18 @@ func Plan(p profile.Profile, cat catalog.Catalog) []Task {
 					return err
 				}
 				headless := filepath.Join(cfgDir, "nvimwiz_headless_init.vim")
-				cmd := exec.CommandContext(ctx, bin, "--headless", "-u", headless, "+Lazy! sync", "+qa")
+
+				cmd := exec.CommandContext(ctx,
+					bin,
+					"--headless",
+					"-u", headless,
+					"+Lazy sync",
+					"+qa",
+				)
+
+				// Critical: ensure runtimepath/stdpath("config") points at the correct app.
+				cmd.Env = append(os.Environ(), "NVIM_APPNAME="+p.EffectiveAppName())
+
 				b, err := cmd.CombinedOutput()
 				if log != nil && len(b) > 0 {
 					log(string(b))
