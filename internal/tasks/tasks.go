@@ -73,6 +73,7 @@ func Plan(p profile.Profile, cat catalog.Catalog) []Task {
 			Name: "Write Neovim config",
 			Run: func(ctx context.Context, st *State, log func(string)) error {
 				_ = ctx
+				_ = st
 				return nvimcfg.Write(p, cat, log)
 			},
 		})
@@ -84,15 +85,16 @@ func Plan(p profile.Profile, cat catalog.Catalog) []Task {
 			Run: func(ctx context.Context, st *State, log func(string)) error {
 				bin := st.NvimPath
 				if bin == "" {
-					p, err := exec.LookPath("nvim")
+					path, err := exec.LookPath("nvim")
 					if err == nil {
-						bin = p
+						bin = path
 					}
 				}
 				if bin == "" {
 					return errors.New("nvim not found for plugin sync")
 				}
-				cfgDir, err := nvimcfg.ConfigDir()
+
+				cfgDir, err := nvimcfg.ConfigDirForProfile(p)
 				if err != nil {
 					return err
 				}

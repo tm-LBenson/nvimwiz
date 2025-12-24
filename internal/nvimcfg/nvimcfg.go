@@ -1,7 +1,6 @@
 package nvimcfg
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,19 +12,31 @@ import (
 	"nvimwiz/internal/profile"
 )
 
-func ConfigDir() (string, error) {
-	if v := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); v != "" {
-		return filepath.Join(v, "nvim"), nil
+func ConfigDirForAppName(appName string) (string, error) {
+	name := strings.TrimSpace(appName)
+	if name == "" {
+		name = "nvim"
 	}
-	h, err := os.UserHomeDir()
+	if xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdgConfigHome != "" {
+		return filepath.Join(xdgConfigHome, name), nil
+	}
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(h, ".config", "nvim"), nil
+	return filepath.Join(homeDir, ".config", name), nil
+}
+
+func ConfigDirForProfile(p profile.Profile) (string, error) {
+	return ConfigDirForAppName(p.EffectiveAppName())
+}
+
+func ConfigDir() (string, error) {
+	return ConfigDirForAppName("nvim")
 }
 
 func Write(p profile.Profile, cat catalog.Catalog, log func(string)) error {
-	root, err := ConfigDir()
+	root, err := ConfigDirForProfile(p)
 	if err != nil {
 		return err
 	}
@@ -36,9 +47,11 @@ func Write(p profile.Profile, cat catalog.Catalog, log func(string)) error {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return err
 	}
-	if err := copyDir(src, root, map[string]bool{
+
+	ignore := map[string]bool{
 		filepath.Join("lua", "nvimwiz", "user.lua"): true,
-	}); err != nil {
+	}
+	if err := copyDir(src, root, ignore); err != nil {
 		return err
 	}
 
@@ -75,13 +88,13 @@ func Write(p profile.Profile, cat catalog.Catalog, log func(string)) error {
 func writeInitLua(root string) error {
 	initPath := filepath.Join(root, "init.lua")
 	newInit := "vim.g.nvimwiz_managed = true\nrequire(\"nvimwiz.loader\")\n"
-	if b, err := os.ReadFile(initPath); err == nil {
-		if strings.Contains(string(b), "vim.g.nvimwiz_managed = true") {
+	if existingBytes, err := os.ReadFile(initPath); err == nil {
+		if strings.Contains(string(existingBytes), "vim.g.nvimwiz_managed = true") {
 			return os.WriteFile(initPath, []byte(newInit), 0o644)
 		}
-		ts := time.Now().Format("20060102-150405")
-		bak := initPath + ".bak-" + ts
-		if err := os.WriteFile(bak, b, 0o644); err != nil {
+		timestamp := time.Now().Format("20060102-150405")
+		backupPath := initPath + ".bak-" + timestamp
+		if err := os.WriteFile(backupPath, existingBytes, 0o644); err != nil {
 			return err
 		}
 	}
@@ -90,21 +103,22 @@ func writeInitLua(root string) error {
 
 func buildConfigLua(p profile.Profile, cat catalog.Catalog) (string, error) {
 	modules := []string{}
-	featIDs := make([]string, 0, len(cat.Features))
+	featureIDs := make([]string, 0, len(cat.Features))
 	for id := range cat.Features {
-		featIDs = append(featIDs, id)
+		featureIDs = append(featureIDs, id)
 	}
-	sort.Strings(featIDs)
-	for _, id := range featIDs {
+	sort.Strings(featureIDs)
+
+	for _, id := range featureIDs {
 		if !p.Features[id] {
 			continue
 		}
-		f, ok := cat.Features[id]
+		feature, ok := cat.Features[id]
 		if !ok {
 			continue
 		}
-		for _, m := range f.Modules {
-			modules = append(modules, m)
+		for _, mod := range feature.Modules {
+			modules = append(modules, mod)
 		}
 	}
 
@@ -114,22 +128,23 @@ func buildConfigLua(p profile.Profile, cat catalog.Catalog) (string, error) {
 		choiceKeys = append(choiceKeys, key)
 	}
 	sort.Strings(choiceKeys)
-	for _, key := range choiceKeys {
-		val := p.Choices[key]
 
-		ch, ok := cat.Choices[key]
+	for _, key := range choiceKeys {
+		choice, ok := cat.Choices[key]
 		if !ok {
 			continue
 		}
-		optID := val
+		optID := strings.TrimSpace(p.Choices[key])
 		if optID == "" {
-			optID = ch.Default
+			optID = choice.Default
 		}
-		opt, ok := findChoiceOption(ch, optID)
+
+		opt, ok := findChoiceOption(choice, optID)
 		if !ok {
-			opt, _ = findChoiceOption(ch, ch.Default)
+			opt, _ = findChoiceOption(choice, choice.Default)
 			optID = opt.ID
 		}
+
 		if key == "ui.explorer" {
 			choices["explorer"] = optID
 		}
@@ -139,8 +154,9 @@ func buildConfigLua(p profile.Profile, cat catalog.Catalog) (string, error) {
 		if key == "ui.statusline" {
 			choices["statusline"] = optID
 		}
-		for _, m := range opt.Modules {
-			modules = append(modules, m)
+
+		for _, mod := range opt.Modules {
+			modules = append(modules, mod)
 		}
 	}
 
@@ -167,82 +183,33 @@ func buildConfigLua(p profile.Profile, cat catalog.Catalog) (string, error) {
 	b.WriteString("\tlocalleader = " + luaString(p.LocalLeader) + ",\n")
 	b.WriteString("\tprojects_dir = " + luaString(projectsDir) + ",\n")
 	b.WriteString("\tchoices = {\n")
-	for _, k := range []string{"explorer", "theme", "statusline"} {
-		v := choices[k]
-		if v == "" {
+	for _, key := range []string{"explorer", "theme", "statusline"} {
+		val := choices[key]
+		if val == "" {
 			continue
 		}
-		b.WriteString("\t\t" + k + " = " + luaString(v) + ",\n")
+		b.WriteString("\t\t" + key + " = " + luaString(val) + ",\n")
 	}
 	b.WriteString("\t},\n")
 	b.WriteString("\tlsp = {\n")
-	for _, k := range []string{"typescript", "python", "web", "go", "bash", "lua", "java"} {
-		b.WriteString("\t\t" + k + " = " + luaBool(lsp[k]) + ",\n")
+	for _, key := range []string{"typescript", "python", "web", "go", "bash", "lua", "java"} {
+		b.WriteString("\t\t" + key + " = " + luaBool(lsp[key]) + ",\n")
 	}
 	b.WriteString("\t},\n")
 	b.WriteString("\tmodules = {\n")
-	for _, m := range modules {
-		b.WriteString("\t\t" + luaString(m) + ",\n")
+	for _, mod := range modules {
+		b.WriteString("\t\t" + luaString(mod) + ",\n")
 	}
 	b.WriteString("\t},\n")
 	b.WriteString("}\n")
 	return b.String(), nil
 }
 
-func findChoiceOption(ch catalog.Choice, id string) (catalog.ChoiceOption, bool) {
-	for _, opt := range ch.Options {
+func findChoiceOption(choice catalog.Choice, id string) (catalog.ChoiceOption, bool) {
+	for _, opt := range choice.Options {
 		if opt.ID == id {
 			return opt, true
 		}
 	}
 	return catalog.ChoiceOption{}, false
-}
-
-func uniq(in []string) []string {
-	seen := map[string]bool{}
-	out := []string{}
-	for _, v := range in {
-		if v == "" {
-			continue
-		}
-		if seen[v] {
-			continue
-		}
-		seen[v] = true
-		out = append(out, v)
-	}
-	return out
-}
-
-func expandTilde(pth string) (string, error) {
-	pth = strings.TrimSpace(pth)
-	if pth == "" {
-		return "", errors.New("empty path")
-	}
-	if strings.HasPrefix(pth, "~/") || pth == "~" {
-		h, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		if pth == "~" {
-			return h, nil
-		}
-		return filepath.Join(h, strings.TrimPrefix(pth, "~/")), nil
-	}
-	return pth, nil
-}
-
-func luaString(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "\"", "\\\"")
-	s = strings.ReplaceAll(s, "\n", "\\n")
-	s = strings.ReplaceAll(s, "\r", "")
-	return "\"" + s + "\""
-}
-
-func luaBool(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
 }
