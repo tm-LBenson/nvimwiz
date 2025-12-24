@@ -35,6 +35,9 @@ func (w *Wizard) updateSettingsInfo() {
 	}
 
 	lines = append(lines, "")
+	lines = append(lines, "Tip: select a setting to see help")
+
+	lines = append(lines, "")
 	lines = append(lines, "Config mode: "+w.p.ConfigMode)
 	if strings.ToLower(strings.TrimSpace(w.p.ConfigMode)) == "integrate" {
 		lines = append(lines, "Integrate means you must require nvimwiz.loader from your own init.lua")

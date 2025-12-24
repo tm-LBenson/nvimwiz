@@ -1,19 +1,41 @@
 package ui
 
-import "strings"
+import (
+	"strings"
+
+	"nvimwiz/internal/profile"
+)
+
+func (w *Wizard) currentProfileName() string {
+	st, err := profile.LoadState()
+	if err == nil {
+		name := strings.TrimSpace(st.Current)
+		if name != "" {
+			return name
+		}
+	}
+	return "default"
+}
 
 func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 	if w.settingsInfo == nil {
 		return
 	}
 
+	profileName := w.currentProfileName()
 	target := strings.ToLower(strings.TrimSpace(w.p.Target))
 
 	lines := []string{}
 	switch fieldKey {
+	case "profile":
+		lines = append(lines, "Info: Profile", "")
+		lines = append(lines, "Profiles are saved sets of settings and feature choices.")
+		lines = append(lines, "Switching profiles lets you keep different Neovim builds and preferences.")
+		lines = append(lines, "", "Current: "+profileName)
+
 	case "target":
 		lines = append(lines, "Info: Target", "")
-		lines = append(lines, "default config writes to your normal ~/.config/nvim")
+		lines = append(lines, "system config writes to your normal ~/.config/nvim")
 		lines = append(lines, "safe build writes to ~/.config/<build name> and does not touch your current config")
 		lines = append(lines, "", "Current: "+target)
 
@@ -21,7 +43,7 @@ func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 		lines = append(lines, "Info: Build name", "")
 		lines = append(lines, "Used for safe builds only.")
 		lines = append(lines, "This becomes the folder name under ~/.config.")
-		lines = append(lines, "", "Build name: "+w.p.AppName)
+		lines = append(lines, "", "Build name: "+strings.TrimSpace(w.p.AppName))
 		lines = append(lines, "Effective app name: "+w.p.EffectiveAppName())
 		lines = append(lines, "")
 		if target == "safe" {

@@ -18,6 +18,29 @@ func setFormLabelWidth(form *tview.Form, width int) {
 	}
 }
 
+func setFocusHelp(p any, fn func()) {
+	type focusSetter interface {
+		SetFocusFunc(func()) *tview.Box
+	}
+	if f, ok := p.(focusSetter); ok {
+		f.SetFocusFunc(fn)
+	}
+}
+
+func attachSettingsHelp(w *Wizard, form *tview.Form, key string) {
+	if w == nil || form == nil {
+		return
+	}
+	idx := form.GetFormItemCount() - 1
+	if idx < 0 {
+		return
+	}
+	item := form.GetFormItem(idx)
+	setFocusHelp(item, func() {
+		w.showSettingsFieldHelp(key)
+	})
+}
+
 func (w *Wizard) pageSettings() tview.Primitive {
 	fields := tview.NewForm()
 	fields.SetBorder(true)
@@ -80,6 +103,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 			w.app.SetFocus(w.pages)
 		})
 	})
+	attachSettingsHelp(w, fields, "profile")
 	profileInit = false
 
 	targetLabels := []string{"default config", "safe build"}
@@ -97,6 +121,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		_ = profile.Save(w.p)
 		w.showSettingsFieldHelp("target")
 	})
+	attachSettingsHelp(w, fields, "target")
 
 	fields.AddInputField("Build name", w.p.AppName, fieldWidth, nil, func(text string) {
 		w.p.AppName = strings.TrimSpace(text)
@@ -104,6 +129,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		_ = profile.Save(w.p)
 		w.showSettingsFieldHelp("build_name")
 	})
+	attachSettingsHelp(w, fields, "build_name")
 
 	presetIDs := make([]string, 0, len(w.cat.Presets))
 	for id := range w.cat.Presets {
@@ -128,6 +154,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		w.applyPreset(id)
 		w.showSettingsFieldHelp("preset")
 	})
+	attachSettingsHelp(w, fields, "preset")
 
 	modeLabels := []string{"managed", "integrate"}
 	modeIndex := 0
@@ -144,6 +171,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		_ = profile.Save(w.p)
 		w.showSettingsFieldHelp("config_mode")
 	})
+	attachSettingsHelp(w, fields, "config_mode")
 
 	fields.AddInputField("Projects dir", w.p.ProjectsDir, fieldWidth, nil, func(text string) {
 		w.p.ProjectsDir = strings.TrimSpace(text)
@@ -151,6 +179,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		_ = profile.Save(w.p)
 		w.showSettingsFieldHelp("projects_dir")
 	})
+	attachSettingsHelp(w, fields, "projects_dir")
 
 	fields.AddInputField("Leader", w.p.Leader, fieldWidth, nil, func(text string) {
 		w.p.Leader = text
@@ -158,6 +187,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		_ = profile.Save(w.p)
 		w.showSettingsFieldHelp("leader")
 	})
+	attachSettingsHelp(w, fields, "leader")
 
 	fields.AddInputField("Local leader", w.p.LocalLeader, fieldWidth, nil, func(text string) {
 		w.p.LocalLeader = text
@@ -165,6 +195,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		_ = profile.Save(w.p)
 		w.showSettingsFieldHelp("local_leader")
 	})
+	attachSettingsHelp(w, fields, "local_leader")
 
 	verifyLabels := []string{"auto", "require", "off"}
 	verifyIndex := 0
@@ -182,6 +213,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		_ = profile.Save(w.p)
 		w.showSettingsFieldHelp("verify")
 	})
+	attachSettingsHelp(w, fields, "verify")
 
 	buttons := tview.NewForm()
 	buttons.AddButton("Back", func() { w.gotoPage("welcome") })
