@@ -40,6 +40,14 @@ func Write(p profile.Profile, cat catalog.Catalog, log func(string)) error {
 	if err != nil {
 		return err
 	}
+
+	target := strings.ToLower(strings.TrimSpace(p.Target))
+	if target == "default" {
+		if _, _, err := BackupDefaultConfigIfNeeded(p, log); err != nil {
+			return err
+		}
+	}
+
 	src, err := assets.FindNvimAssets()
 	if err != nil {
 		return err
@@ -81,7 +89,7 @@ func Write(p profile.Profile, cat catalog.Catalog, log func(string)) error {
 
 	marker := Marker{
 		ManagedBy: "nvimwiz",
-		Target:    strings.ToLower(strings.TrimSpace(p.Target)),
+		Target:    target,
 		AppName:   p.EffectiveAppName(),
 		Mode:      strings.ToLower(strings.TrimSpace(p.ConfigMode)),
 	}
