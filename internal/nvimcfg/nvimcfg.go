@@ -79,6 +79,16 @@ func Write(p profile.Profile, cat catalog.Catalog, log func(string)) error {
 		return err
 	}
 
+	marker := Marker{
+		ManagedBy: "nvimwiz",
+		Target:    strings.ToLower(strings.TrimSpace(p.Target)),
+		AppName:   p.EffectiveAppName(),
+		Mode:      strings.ToLower(strings.TrimSpace(p.ConfigMode)),
+	}
+	if err := WriteMarker(root, marker); err != nil {
+		return err
+	}
+
 	if log != nil {
 		log("Wrote Neovim config to " + root)
 	}

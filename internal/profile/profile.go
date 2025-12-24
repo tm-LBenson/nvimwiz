@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"nvimwiz/internal/catalog"
@@ -26,63 +27,12 @@ type Profile struct {
 	AppName     string            `json:"appName"`
 }
 
-func Path() (string, error) {
-	if xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdgConfigHome != "" {
-		return filepath.Join(xdgConfigHome, "nvimwiz", "profile.json"), nil
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(homeDir, ".config", "nvimwiz", "profile.json"), nil
-}
-
-func Load(cat catalog.Catalog) (Profile, bool, error) {
-	profilePath, err := Path()
-	if err != nil {
-		return Profile{}, false, err
-	}
-
-	profileBytes, err := os.ReadFile(profilePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			defaultProfile := Default(cat)
-			return defaultProfile, false, nil
-		}
-		return Profile{}, false, err
-	}
-
-	var loaded Profile
-	if err := json.Unmarshal(profileBytes, &loaded); err != nil {
-		defaultProfile := Default(cat)
-		return defaultProfile, true, nil
-	}
-
-	loaded.Normalize(cat)
-	return loaded, true, nil
-}
-
-func Save(p Profile) error {
-	profilePath, err := Path()
-	if err != nil {
-		return err
-	}
-
-	parentDir := filepath.Dir(profilePath)
-	if err := os.MkdirAll(parentDir, 0o755); err != nil {
-		return err
-	}
-
-	encoded, err := json.MarshalIndent(p, "", "  ")
-	if err != nil {
-		return err
-	}
-	encoded = append(encoded, '\n')
-	return os.WriteFile(profilePath, encoded, 0o644)
+type State struct {
+	Current string `json:"current"`
 }
 
 func Default(cat catalog.Catalog) Profile {
-	defaultProfile := Profile{
+	p := Profile{
 		Version:     CurrentVersion,
 		Preset:      "lazyvim",
 		ProjectsDir: "~/projects",
@@ -96,17 +46,17 @@ func Default(cat catalog.Catalog) Profile {
 		AppName:     "",
 	}
 
-	if preset, ok := cat.Presets[defaultProfile.Preset]; ok {
+	if preset, ok := cat.Presets[p.Preset]; ok {
 		for featureID, enabled := range preset.Features {
-			defaultProfile.Features[featureID] = enabled
+			p.Features[featureID] = enabled
 		}
-		for choiceKey, value := range preset.Choices {
-			defaultProfile.Choices[choiceKey] = value
+		for choiceKey, choiceValue := range preset.Choices {
+			p.Choices[choiceKey] = choiceValue
 		}
 	}
 
-	defaultProfile.Normalize(cat)
-	return defaultProfile
+	p.Normalize(cat)
+	return p
 }
 
 func (p *Profile) Normalize(cat catalog.Catalog) {
@@ -228,6 +178,315 @@ func sanitizeAppName(input string) string {
 		}
 	}
 
+	out := strings.Trim(strings.TrimSpace(string(runes)), "-_")
+	if len(out) > 40 {
+		out = out[:40]
+	}
+	return out
+}
+
+func Load(cat catalog.Catalog) (Profile, bool, error) {
+	_, p, err := LoadCurrent(cat)
+	if err != nil {
+		return Profile{}, false, err
+	}
+	return p, true, nil
+}
+
+func Save(p Profile) error {
+	currentName, err := CurrentName()
+	if err != nil {
+		return err
+	}
+	return SaveAs(currentName, p)
+}
+
+func LoadState() (State, error) {
+	state, _, err := loadState()
+	return state, err
+}
+
+func CurrentName() (string, error) {
+	if err := migrateLegacy(); err != nil {
+		return "", err
+	}
+	state, ok, err := loadState()
+	if err != nil {
+		return "", err
+	}
+	name := "default"
+	if ok {
+		name = sanitizeProfileName(state.Current)
+		if name == "" {
+			name = "default"
+		}
+	}
+	return name, nil
+}
+
+func LoadCurrent(cat catalog.Catalog) (string, Profile, error) {
+	if err := migrateLegacy(); err != nil {
+		return "", Profile{}, err
+	}
+
+	state, ok, err := loadState()
+	if err != nil {
+		return "", Profile{}, err
+	}
+
+	name := "default"
+	if ok {
+		name = sanitizeProfileName(state.Current)
+		if name == "" {
+			name = "default"
+		}
+	}
+
+	p, _, err := LoadByName(name, cat)
+	if err != nil {
+		return "", Profile{}, err
+	}
+	p.Normalize(cat)
+	_ = SaveAs(name, p)
+	_ = setCurrent(name)
+	return name, p, nil
+}
+
+func SetCurrent(name string) error {
+	name = sanitizeProfileName(name)
+	if name == "" {
+		name = "default"
+	}
+	if err := migrateLegacy(); err != nil {
+		return err
+	}
+	return setCurrent(name)
+}
+
+func ListProfiles() ([]string, error) {
+	if err := migrateLegacy(); err != nil {
+		return nil, err
+	}
+	dir, err := profilesDir()
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []string{"default"}, nil
+		}
+		return nil, err
+	}
+	names := []string{}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		fileName := entry.Name()
+		if !strings.HasSuffix(fileName, ".json") {
+			continue
+		}
+		base := strings.TrimSuffix(fileName, ".json")
+		base = sanitizeProfileName(base)
+		if base == "" {
+			continue
+		}
+		names = append(names, base)
+	}
+	if len(names) == 0 {
+		names = append(names, "default")
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func LoadByName(name string, cat catalog.Catalog) (Profile, bool, error) {
+	name = sanitizeProfileName(name)
+	if name == "" {
+		name = "default"
+	}
+	pth, err := profilePath(name)
+	if err != nil {
+		return Profile{}, false, err
+	}
+	bytes, err := os.ReadFile(pth)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			p := Default(cat)
+			p.Normalize(cat)
+			return p, false, nil
+		}
+		return Profile{}, false, err
+	}
+	var p Profile
+	if err := json.Unmarshal(bytes, &p); err != nil {
+		p = Default(cat)
+		p.Normalize(cat)
+		return p, true, nil
+	}
+	p.Normalize(cat)
+	return p, true, nil
+}
+
+func SaveAs(name string, p Profile) error {
+	name = sanitizeProfileName(name)
+	if name == "" {
+		name = "default"
+	}
+	dir, err := profilesDir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	pth := filepath.Join(dir, name+".json")
+	encoded, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return err
+	}
+	encoded = append(encoded, '\n')
+	return os.WriteFile(pth, encoded, 0o644)
+}
+
+func baseDir() (string, error) {
+	if xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdgConfigHome != "" {
+		return filepath.Join(xdgConfigHome, "nvimwiz"), nil
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".config", "nvimwiz"), nil
+}
+
+func profilesDir() (string, error) {
+	base, err := baseDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "profiles"), nil
+}
+
+func profilePath(name string) (string, error) {
+	dir, err := profilesDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, name+".json"), nil
+}
+
+func legacyPath() (string, error) {
+	base, err := baseDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "profile.json"), nil
+}
+
+func statePath() (string, error) {
+	base, err := baseDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "state.json"), nil
+}
+
+func loadState() (State, bool, error) {
+	pth, err := statePath()
+	if err != nil {
+		return State{}, false, err
+	}
+	bytes, err := os.ReadFile(pth)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return State{Current: "default"}, false, nil
+		}
+		return State{}, false, err
+	}
+	var state State
+	if err := json.Unmarshal(bytes, &state); err != nil {
+		return State{Current: "default"}, true, nil
+	}
+	return state, true, nil
+}
+
+func setCurrent(name string) error {
+	pth, err := statePath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(pth), 0o755); err != nil {
+		return err
+	}
+	state := State{Current: name}
+	encoded, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	encoded = append(encoded, '\n')
+	return os.WriteFile(pth, encoded, 0o644)
+}
+
+func migrateLegacy() error {
+	dir, err := profilesDir()
+	if err != nil {
+		return err
+	}
+	defaultProfilePath := filepath.Join(dir, "default.json")
+	if _, err := os.Stat(defaultProfilePath); err == nil {
+		return nil
+	}
+
+	legacyProfilePath, err := legacyPath()
+	if err != nil {
+		return err
+	}
+
+	var p Profile
+	legacyBytes, err := os.ReadFile(legacyProfilePath)
+	if err == nil {
+		if err := json.Unmarshal(legacyBytes, &p); err != nil {
+			p = Profile{}
+		}
+	} else {
+		p = Profile{}
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	encoded, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return err
+	}
+	encoded = append(encoded, '\n')
+	if err := os.WriteFile(defaultProfilePath, encoded, 0o644); err != nil {
+		return err
+	}
+
+	if err := setCurrent("default"); err != nil {
+		return err
+	}
+
+	if err == nil {
+		_ = os.Rename(legacyProfilePath, legacyProfilePath+".bak")
+	}
+
+	return nil
+}
+
+func sanitizeProfileName(input string) string {
+	normalized := strings.TrimSpace(strings.ToLower(input))
+	normalized = strings.ReplaceAll(normalized, " ", "-")
+	runes := make([]rune, 0, len(normalized))
+	for _, r := range normalized {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			runes = append(runes, r)
+		}
+	}
 	out := strings.Trim(strings.TrimSpace(string(runes)), "-_")
 	if len(out) > 40 {
 		out = out[:40]

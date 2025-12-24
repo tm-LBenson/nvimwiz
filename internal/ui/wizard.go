@@ -99,3 +99,24 @@ func (w *Wizard) gotoPage(name string) {
 	}
 	w.pages.SwitchToPage(name)
 }
+func (w *Wizard) applyPreset(presetID string) {
+	preset, ok := w.cat.Presets[presetID]
+	if !ok {
+		return
+	}
+	w.p.Preset = presetID
+	if w.p.Features == nil {
+		w.p.Features = map[string]bool{}
+	}
+	if w.p.Choices == nil {
+		w.p.Choices = map[string]string{}
+	}
+	for featureID, enabled := range preset.Features {
+		w.p.Features[featureID] = enabled
+	}
+	for choiceKey, choiceValue := range preset.Choices {
+		w.p.Choices[choiceKey] = choiceValue
+	}
+	w.p.Normalize(w.cat)
+	_ = profile.Save(w.p)
+}

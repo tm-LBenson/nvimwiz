@@ -29,8 +29,50 @@ func (w *Wizard) pageSettings() tview.Primitive {
 	w.settingsInfo.SetTitle("Info")
 
 	setFormLabelWidth(form, 30)
-
 	fieldWidth := 24
+
+	profileNames, err := profile.ListProfiles()
+	if err != nil || len(profileNames) == 0 {
+		profileNames = []string{"default"}
+	}
+
+	state, _ := profile.LoadState()
+	currentName := strings.TrimSpace(state.Current)
+	if currentName == "" {
+		currentName = "default"
+	}
+
+	profileIndex := 0
+	for i, name := range profileNames {
+		if name == currentName {
+			profileIndex = i
+			break
+		}
+	}
+
+	profileInit := true
+	form.AddDropDown("Profile", profileNames, profileIndex, func(_ string, index int) {
+		if profileInit {
+			return
+		}
+		if index < 0 || index >= len(profileNames) {
+			return
+		}
+		selected := profileNames[index]
+		p, _, loadErr := profile.LoadByName(selected, w.cat)
+		if loadErr != nil {
+			return
+		}
+		w.p = p
+		_ = profile.SetCurrent(selected)
+		w.app.QueueUpdateDraw(func() {
+			w.pages.RemovePage("settings")
+			w.pages.AddPage("settings", w.pageSettings(), true, false)
+			w.pages.SwitchToPage("settings")
+			w.app.SetFocus(w.pages)
+		})
+	})
+	profileInit = false
 
 	targetLabels := []string{"default config", "safe build"}
 	targetIndex := 0
@@ -45,38 +87,38 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		}
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("target")
+		w.updateSettingsInfo()
 	})
 
 	form.AddInputField("Build name", w.p.AppName, fieldWidth, nil, func(text string) {
 		w.p.AppName = strings.TrimSpace(text)
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("build_name")
+		w.updateSettingsInfo()
 	})
 
 	presetIDs := make([]string, 0, len(w.cat.Presets))
-	for presetID := range w.cat.Presets {
-		presetIDs = append(presetIDs, presetID)
+	for id := range w.cat.Presets {
+		presetIDs = append(presetIDs, id)
 	}
 	sort.Strings(presetIDs)
 
 	presetLabels := make([]string, 0, len(presetIDs))
 	presetIndex := 0
-	for i, presetID := range presetIDs {
-		preset := w.cat.Presets[presetID]
+	for i, id := range presetIDs {
+		preset := w.cat.Presets[id]
 		presetLabels = append(presetLabels, preset.Title)
-		if presetID == w.p.Preset {
+		if id == w.p.Preset {
 			presetIndex = i
 		}
 	}
-
 	form.AddDropDown("Preset", presetLabels, presetIndex, func(_ string, index int) {
 		if index < 0 || index >= len(presetIDs) {
 			return
 		}
-		w.applyPreset(presetIDs[index])
-		w.showSettingsFieldHelp("preset")
+		id := presetIDs[index]
+		w.applyPreset(id)
+		w.updateSettingsInfo()
 	})
 
 	modeLabels := []string{"managed", "integrate"}
@@ -92,28 +134,27 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		}
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("config_mode")
+		w.updateSettingsInfo()
 	})
 
 	form.AddInputField("Projects dir", w.p.ProjectsDir, fieldWidth, nil, func(text string) {
 		w.p.ProjectsDir = strings.TrimSpace(text)
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("projects_dir")
+		w.updateSettingsInfo()
 	})
 
 	form.AddInputField("Leader", w.p.Leader, fieldWidth, nil, func(text string) {
 		w.p.Leader = text
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("leader")
+		w.updateSettingsInfo()
 	})
-
 	form.AddInputField("Local leader", w.p.LocalLeader, fieldWidth, nil, func(text string) {
 		w.p.LocalLeader = text
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("local_leader")
+		w.updateSettingsInfo()
 	})
 
 	verifyLabels := []string{"auto", "require", "off"}
@@ -130,7 +171,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		}
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("verify")
+		w.updateSettingsInfo()
 	})
 
 	form.AddButton("Back", func() { w.gotoPage("welcome") })
@@ -157,79 +198,6 @@ func (w *Wizard) pageSettings() tview.Primitive {
 	return wrap
 }
 
-func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
-	if w.settingsInfo == nil {
-		return
-	}
-
-	target := strings.ToLower(strings.TrimSpace(w.p.Target))
-
-	lines := []string{}
-	switch fieldKey {
-	case "target":
-		lines = append(lines, "Info: Target", "")
-		lines = append(lines, "default: uses your normal ~/.config/nvim")
-		lines = append(lines, "safe: uses ~/.config/<build name> and does not touch your current config")
-		lines = append(lines, "", "Current: "+target)
-
-	case "build_name":
-		lines = append(lines, "Info: Build name", "")
-		lines = append(lines, "Used only for Safe builds (NVIM_APPNAME).")
-		lines = append(lines, "It becomes the folder under ~/.config/<name>.")
-		lines = append(lines, "", "Build name: "+w.p.AppName)
-		lines = append(lines, "Effective app name: "+w.p.EffectiveAppName())
-		lines = append(lines, "")
-		if target == "safe" {
-			lines = append(lines, "Launch: NVIM_APPNAME="+w.p.EffectiveAppName()+" nvim")
-		} else {
-			lines = append(lines, "Launch: nvim")
-		}
-
-	case "preset":
-		lines = append(lines, "Info: Preset", "")
-		lines = append(lines, "A preset enables a curated set of features and defaults.")
-		lines = append(lines, "Good starting point if you are new to Neovim.")
-		lines = append(lines, "", "Current: "+w.p.Preset)
-
-	case "config_mode":
-		lines = append(lines, "Info: Config mode", "")
-		lines = append(lines, "managed: nvimwiz owns init.lua and generated modules")
-		lines = append(lines, "integrate: you keep your init.lua and require nvimwiz.loader")
-		lines = append(lines, "", "Current: "+w.p.ConfigMode)
-
-	case "projects_dir":
-		lines = append(lines, "Info: Projects dir", "")
-		lines = append(lines, "Used by the Neovim start screen to list your projects.")
-		lines = append(lines, "Pick the folder where you keep your repos.")
-		lines = append(lines, "", "Current: "+w.p.ProjectsDir)
-
-	case "leader":
-		lines = append(lines, "Info: Leader", "")
-		lines = append(lines, "Leader prefixes shortcuts in many Neovim setups.")
-		lines = append(lines, "Common choice is Space.")
-		lines = append(lines, "", "Current: "+encodeKeyForUI(w.p.Leader))
-
-	case "local_leader":
-		lines = append(lines, "Info: Local leader", "")
-		lines = append(lines, "Local leader is used by some plugins for filetype specific shortcuts.")
-		lines = append(lines, "", "Current: "+encodeKeyForUI(w.p.LocalLeader))
-
-	case "verify":
-		lines = append(lines, "Info: Verify downloads", "")
-		lines = append(lines, "auto: verify if checksum is available")
-		lines = append(lines, "require: fail if checksum is missing")
-		lines = append(lines, "off: skip verification")
-		lines = append(lines, "", "Current: "+w.p.Verify)
-
-	default:
-		w.updateSettingsInfo()
-		return
-	}
-
-	lines = append(lines, "", "Press Save to return to summary.")
-	w.settingsInfo.SetText(strings.Join(lines, "\n"))
-}
-
 func (w *Wizard) updateSettingsInfo() {
 	if w.settingsInfo == nil {
 		return
@@ -242,7 +210,14 @@ func (w *Wizard) updateSettingsInfo() {
 		presetShort = pr.Short
 	}
 
+	state, _ := profile.LoadState()
+	profileName := strings.TrimSpace(state.Current)
+	if profileName == "" {
+		profileName = "default"
+	}
+
 	lines := []string{}
+	lines = append(lines, "Profile: "+profileName)
 	lines = append(lines, "Preset: "+preset)
 	if presetShort != "" {
 		lines = append(lines, presetShort)
@@ -250,10 +225,8 @@ func (w *Wizard) updateSettingsInfo() {
 
 	lines = append(lines, "")
 	lines = append(lines, "Config mode: "+w.p.ConfigMode)
-
 	lines = append(lines, "")
 	lines = append(lines, "Verify downloads: "+w.p.Verify)
-
 	lines = append(lines, "")
 	lines = append(lines, "Projects dir: "+w.p.ProjectsDir)
 	lines = append(lines, "Leader: "+encodeKeyForUI(w.p.Leader))
@@ -264,7 +237,6 @@ func (w *Wizard) updateSettingsInfo() {
 	lines = append(lines, "Target: "+target)
 	lines = append(lines, "Build name: "+w.p.AppName)
 	lines = append(lines, "Effective app name: "+w.p.EffectiveAppName())
-
 	lines = append(lines, "")
 	lines = append(lines, "Launch:")
 	if target == "safe" {
@@ -290,20 +262,4 @@ func encodeKeyForUI(key string) string {
 		return "(enter)"
 	}
 	return key
-}
-
-func (w *Wizard) applyPreset(id string) {
-	pr, ok := w.cat.Presets[id]
-	if !ok {
-		return
-	}
-	w.p.Preset = id
-	for featureID, enabled := range pr.Features {
-		w.p.Features[featureID] = enabled
-	}
-	for choiceKey, choiceValue := range pr.Choices {
-		w.p.Choices[choiceKey] = choiceValue
-	}
-	w.p.Normalize(w.cat)
-	_ = profile.Save(w.p)
 }
