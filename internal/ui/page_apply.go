@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/rivo/tview"
 
 	"nvimwiz/internal/tasks"
 )
+
+var applyRunning int32
 
 func (w *Wizard) pageApply() tview.Primitive {
 	w.logView = tview.NewTextView()
@@ -25,6 +28,7 @@ func (w *Wizard) pageApply() tview.Primitive {
 
 	buttons := tview.NewForm()
 	buttons.AddButton("Back", func() { w.gotoPage("summary") })
+	buttons.AddButton("Retry", func() { w.startApply() })
 	buttons.AddButton("Quit", func() { w.app.Stop() })
 	buttons.SetButtonsAlign(tview.AlignCenter)
 
@@ -36,6 +40,10 @@ func (w *Wizard) pageApply() tview.Primitive {
 }
 
 func (w *Wizard) startApply() {
+	if !atomic.CompareAndSwapInt32(&applyRunning, 0, 1) {
+		return
+	}
+
 	w.logView.SetText("")
 	w.progressView.SetText("")
 	w.taskPlan = tasks.Plan(w.p, w.cat)
@@ -57,6 +65,7 @@ func (w *Wizard) startApply() {
 	}
 
 	go func() {
+		defer atomic.StoreInt32(&applyRunning, 0)
 		start := time.Now()
 		err := tasks.RunAll(ctx, w.taskPlan, logFn, progressFn)
 		dur := time.Since(start).Round(time.Second)

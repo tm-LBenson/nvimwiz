@@ -17,6 +17,14 @@ func InstallNeovim(ctx context.Context, verify string, log func(string)) (string
 	if err != nil {
 		return "", err
 	}
+
+	latest := normalizeVersion(rel.TagName)
+	if cur, path, ok := installedCommandVersion("nvim", "--version"); ok && cur == latest {
+		if log != nil {
+			log("Neovim already up to date (" + rel.TagName + "), skipping download")
+		}
+		return path, nil
+	}
 	asset, ok := findAsset(rel, func(a ghAsset) bool {
 		name := a.Name
 		if !strings.HasSuffix(name, ".tar.gz") {

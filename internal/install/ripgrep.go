@@ -16,6 +16,14 @@ func InstallRipgrep(ctx context.Context, verify string, log func(string)) (strin
 	if err != nil {
 		return "", err
 	}
+
+	latest := normalizeVersion(rel.TagName)
+	if cur, path, ok := installedCommandVersion("rg", "--version"); ok && cur == latest {
+		if log != nil {
+			log("ripgrep already up-to-date (" + rel.TagName + "), skipping")
+		}
+		return path, nil
+	}
 	asset, ok := findAsset(rel, func(a ghAsset) bool {
 		name := a.Name
 		if !strings.HasPrefix(name, "ripgrep-") || !strings.HasSuffix(name, ".tar.gz") {

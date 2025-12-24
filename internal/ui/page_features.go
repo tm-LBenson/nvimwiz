@@ -351,7 +351,7 @@ func (w *Wizard) itemActionLabel(it itemRef) string {
 	on := w.p.Features[it.ID]
 	if strings.EqualFold(w.currentCategory, "Install") {
 		if on {
-			return "Install"
+			return "Install/Update"
 		}
 		return "Skip"
 	}
@@ -520,9 +520,9 @@ func (w *Wizard) pickerOptions(it itemRef) ([]string, int) {
 	on := w.p.Features[it.ID]
 	if strings.EqualFold(w.currentCategory, "Install") {
 		if on {
-			return []string{"Install", "Skip"}, 0
+			return []string{"Install/Update", "Skip"}, 0
 		}
-		return []string{"Install", "Skip"}, 1
+		return []string{"Install/Update", "Skip"}, 1
 	}
 	if on {
 		return []string{"Enable", "Disable"}, 0
@@ -548,7 +548,7 @@ func (w *Wizard) applyPickerSelection(it itemRef, picked string) {
 	}
 
 	if strings.EqualFold(w.currentCategory, "Install") {
-		w.p.Features[it.ID] = picked == "Install"
+		w.p.Features[it.ID] = picked == "Install/Update"
 	} else {
 		w.p.Features[it.ID] = picked == "Enable"
 	}
@@ -580,11 +580,11 @@ func beginnerNote(id, title string) string {
 	case strings.Contains(low, "nvim-tree") || strings.Contains(low, "file tree") || strings.Contains(low, "tree"):
 		return "A file explorer sidebar (like VS Code). Useful if you prefer browsing folders visually."
 	case strings.Contains(low, "ripgrep") || strings.Contains(low, " rg"):
-		return "ripgrep (rg) is a very fast search tool. Many Neovim search features use it under the hood."
+		return "ripgrep (rg) is a very fast search tool. Many Neovim search features use it under the hood.\n\nInstall/Update will only download if you are missing rg or are not on the latest release."
 	case strings.Contains(low, "fd"):
-		return "fd is a faster, friendlier 'find' command. Plugins use it to list files quickly."
+		return "fd is a faster, friendlier 'find' command. Plugins use it to list files quickly.\n\nInstall/Update will only download if you are missing fd or are not on the latest release."
 	case strings.Contains(low, "neovim") || strings.Contains(low, "nvim"):
-		return "This is the editor itself. Installing a stable version avoids random breakage from old distro packages."
+		return "This is the editor itself. Installing a stable version avoids random breakage from old distro packages.\n\nInstall/Update will check your current Neovim version and skip downloading if you are already on the latest release."
 	case strings.Contains(low, "statusline"):
 		return "A statusline shows mode, file info, git branch, diagnostics, and more at the bottom of the screen."
 	case strings.Contains(low, "theme") || strings.Contains(low, "colorscheme"):
