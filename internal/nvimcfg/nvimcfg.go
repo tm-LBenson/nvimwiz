@@ -40,14 +40,6 @@ func Write(p profile.Profile, cat catalog.Catalog, log func(string)) error {
 	if err != nil {
 		return err
 	}
-
-	target := strings.ToLower(strings.TrimSpace(p.Target))
-	if target == "default" {
-		if _, _, err := BackupDefaultConfigIfNeeded(p, log); err != nil {
-			return err
-		}
-	}
-
 	src, err := assets.FindNvimAssets()
 	if err != nil {
 		return err
@@ -84,16 +76,6 @@ func Write(p profile.Profile, cat catalog.Catalog, log func(string)) error {
 
 	headless := "lua require(\"nvimwiz.loader\")\n"
 	if err := os.WriteFile(filepath.Join(root, "nvimwiz_headless_init.vim"), []byte(headless), 0o644); err != nil {
-		return err
-	}
-
-	marker := Marker{
-		ManagedBy: "nvimwiz",
-		Target:    target,
-		AppName:   p.EffectiveAppName(),
-		Mode:      strings.ToLower(strings.TrimSpace(p.ConfigMode)),
-	}
-	if err := WriteMarker(root, marker); err != nil {
 		return err
 	}
 
@@ -189,6 +171,7 @@ func buildConfigLua(p profile.Profile, cat catalog.Catalog) (string, error) {
 		"typescript": p.Features["lsp.typescript"],
 		"python":     p.Features["lsp.python"],
 		"web":        p.Features["lsp.web"],
+		"emmet":      p.Features["lsp.emmet"],
 		"go":         p.Features["lsp.go"],
 		"bash":       p.Features["lsp.bash"],
 		"lua":        p.Features["lsp.lua"],
@@ -210,7 +193,7 @@ func buildConfigLua(p profile.Profile, cat catalog.Catalog) (string, error) {
 	}
 	b.WriteString("\t},\n")
 	b.WriteString("\tlsp = {\n")
-	for _, key := range []string{"typescript", "python", "web", "go", "bash", "lua", "java"} {
+	for _, key := range []string{"typescript", "python", "web", "emmet", "go", "bash", "lua", "java"} {
 		b.WriteString("\t\t" + key + " = " + luaBool(lsp[key]) + ",\n")
 	}
 	b.WriteString("\t},\n")

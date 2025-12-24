@@ -57,11 +57,13 @@ func Get() Catalog {
 		{ID: "core.dashboard", Category: "Core", Title: "Projects dashboard", Short: "Projects dashboard on startup", Long: "Shows a projects screen on startup and lets you pick or create projects", Default: true, Modules: []string{"nvimwiz.modules.core.dashboard_projects"}},
 		{ID: "core.telescope", Category: "Core", Title: "Telescope", Short: "Fuzzy finder for files/grep", Long: "Adds Telescope with keymaps <leader>ff, <leader>fg, <leader>fb", Default: true, Modules: []string{"nvimwiz.modules.core.telescope"}},
 		{ID: "core.treesitter", Category: "Core", Title: "Treesitter", Short: "Better syntax highlighting", Long: "Adds nvim-treesitter for improved highlighting and parsing", Default: true, Modules: []string{"nvimwiz.modules.core.treesitter"}},
+		{ID: "core.completion", Category: "Core", Title: "Autocomplete", Short: "Autocomplete menu + snippets (VS Code-style)", Long: "Adds an autocomplete menu while you type (nvim-cmp) with snippet expansion (LuaSnip) and a large snippet collection (friendly-snippets). Recommended for new Neovim users.", Default: true, Modules: []string{"nvimwiz.modules.core.completion"}},
 
 		{ID: "lsp.core", Category: "LSP", Title: "LSP core", Short: "Mason + lspconfig baseline", Long: "Enables Mason and nvim-lspconfig with sane defaults", Default: true, Modules: []string{"nvimwiz.modules.lsp.core"}},
 		{ID: "lsp.typescript", Category: "LSP", Title: "TypeScript/JavaScript", Short: "TypeScript/JavaScript language server", Long: "Enables a TypeScript/JavaScript language server when available in your lspconfig version", Default: true, Requires: []string{"lsp.core"}},
 		{ID: "lsp.python", Category: "LSP", Title: "Python", Short: "Python language server", Long: "Enables Pyright", Default: true, Requires: []string{"lsp.core"}},
 		{ID: "lsp.web", Category: "LSP", Title: "HTML/CSS", Short: "HTML + CSS language servers", Long: "Enables html and cssls servers", Default: true, Requires: []string{"lsp.core"}},
+		{ID: "lsp.emmet", Category: "LSP", Title: "Emmet", Short: "Emmet completions for HTML/CSS", Long: "Enables Emmet completions for HTML/CSS and related filetypes. Works best with Autocomplete enabled.", Default: false, Requires: []string{"lsp.core", "lsp.web", "core.completion"}},
 		{ID: "lsp.go", Category: "LSP", Title: "Go", Short: "Go language server", Long: "Enables gopls", Default: true, Requires: []string{"lsp.core"}},
 		{ID: "lsp.bash", Category: "LSP", Title: "Bash", Short: "Bash language server", Long: "Enables bashls", Default: true, Requires: []string{"lsp.core"}},
 		{ID: "lsp.lua", Category: "LSP", Title: "Lua", Short: "Lua language server", Long: "Enables lua_ls and configures vim globals", Default: true, Requires: []string{"lsp.core"}},

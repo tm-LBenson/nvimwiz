@@ -1,160 +1,163 @@
 local M = {}
 
-local function native_api()
-	return vim.lsp and vim.lsp.config ~= nil and vim.lsp.enable ~= nil
+local function uniq(list)
+  local seen = {}
+  local out = {}
+  for _, v in ipairs(list) do
+    if v and v ~= "" and not seen[v] then
+      seen[v] = true
+      table.insert(out, v)
+    end
+  end
+  return out
 end
 
-local function has_config(name)
-	local p = "lsp/" .. name .. ".lua"
-	local files = vim.api.nvim_get_runtime_file(p, false)
-	return files and #files > 0
+local function has_config(configs, name)
+  return configs and configs[name] ~= nil
 end
 
-local function push_unique(list, v)
-	if not v or v == "" then
-		return
-	end
-	for _, x in ipairs(list) do
-		if x == v then
-			return
-		end
-	end
-	list[#list + 1] = v
+local function add_one(configs, servers, name)
+  if not has_config(configs, name) then
+    return false
+  end
+  table.insert(servers, name)
+  return true
 end
 
-local function pick_ts(use_native)
-	if use_native then
-		if has_config("ts_ls") then
-			return "ts_ls"
-		end
-		if has_config("tsserver") then
-			return "tsserver"
-		end
-		return "ts_ls"
-	end
-	return "tsserver"
+local function add_prefer(configs, servers, preferred, fallback)
+  if add_one(configs, servers, preferred) then
+    return preferred
+  end
+  if fallback and add_one(configs, servers, fallback) then
+    return fallback
+  end
+  return nil
+end
+
+local function merge_capabilities(base, extra)
+  if not extra then
+    return base
+  end
+  return vim.tbl_deep_extend("force", {}, base, extra)
 end
 
 function M.spec()
-	return {
-		{
-			"mason-org/mason.nvim",
-			config = function()
-				local ok, mason = pcall(require, "mason")
-				if ok then
-					mason.setup({})
-				end
-			end,
-		},
-		{
-			"mason-org/mason-lspconfig.nvim",
-			dependencies = { "mason-org/mason.nvim", "neovim/nvim-lspconfig" },
-			config = function()
-				local ok_util, util = pcall(require, "nvimwiz.util")
-				if not ok_util then
-					return
-				end
+  return {
+    {
+      "neovim/nvim-lspconfig",
+      dependencies = { "williamboman/mason.nvim", "williamboman/mason-lspconfig.nvim" },
+      config = function()
+        local cfg = require("nvimwiz.generated.config")
+        local wants = (cfg and cfg.lsp) or {}
 
-				local cfg = util.config() or {}
-				local wants = cfg.lsp or {}
+        require("mason").setup({})
+        local mlsp = require("mason-lspconfig")
 
-				local use_native = native_api()
+        local configs = nil
+        pcall(function()
+          configs = require("lspconfig.configs")
+        end)
 
-				local install = {}
-				local enable = {}
+        local servers = {}
 
-				local function add(name, also_enable)
-					if also_enable and use_native and not has_config(name) then
-						push_unique(install, name)
-						return
-					end
-					push_unique(install, name)
-					if also_enable then
-						push_unique(enable, name)
-					end
-				end
+        if wants.typescript then
+          add_prefer(configs, servers, "ts_ls", "tsserver")
+        end
+        if wants.python then
+          add_one(configs, servers, "pyright")
+        end
+        if wants.web then
+          add_one(configs, servers, "html")
+          add_one(configs, servers, "cssls")
+        end
+        if wants.emmet then
+          add_prefer(configs, servers, "emmet_ls", "emmet_language_server")
+        end
+        if wants.go then
+          add_one(configs, servers, "gopls")
+        end
+        if wants.bash then
+          add_one(configs, servers, "bashls")
+        end
+        if wants.lua then
+          add_one(configs, servers, "lua_ls")
+        end
+        if wants.java then
+          add_one(configs, servers, "jdtls")
+        end
 
-				if wants.typescript then
-					add(pick_ts(use_native), true)
-				end
-				if wants.python then
-					add("pyright", true)
-				end
-				if wants.web then
-					add("html", true)
-					add("cssls", true)
-				end
-				if wants.go then
-					add("gopls", true)
-				end
-				if wants.bash then
-					add("bashls", true)
-				end
-				if wants.lua then
-					add("lua_ls", true)
-				end
-				if wants.java then
-					add("jdtls", false)
-				end
+        servers = uniq(servers)
 
-				local ok_mlsp, mlsp = pcall(require, "mason-lspconfig")
-				if ok_mlsp then
-					local opts = { ensure_installed = install }
-					if type(mlsp.setup_handlers) == "function" then
-						opts.automatic_installation = true
-					else
-						opts.automatic_enable = false
-					end
-					mlsp.setup(opts)
-				end
+        mlsp.setup({ ensure_installed = servers, automatic_installation = true })
 
-				local ok_lsp, lsp = pcall(require, "nvimwiz.lsp")
-				if not ok_lsp then
-					return
-				end
+        local caps = require("nvimwiz.lsp").capabilities()
 
-				local capabilities = lsp.capabilities()
+        local function setup_server(server_name)
+          local opts = {}
 
-				vim.diagnostic.config({
-					virtual_text = true,
-					signs = true,
-					underline = true,
-					update_in_insert = false,
-					severity_sort = true,
-				})
+          if server_name == "lua_ls" then
+            opts.settings = {
+              Lua = {
+                diagnostics = { globals = { "vim" } },
+                workspace = { checkThirdParty = false },
+                telemetry = { enable = false },
+              },
+            }
+          end
 
-				local function mk_opts(server)
-					local opts = { on_attach = lsp.on_attach, capabilities = capabilities }
-					if server == "lua_ls" then
-						opts.settings = { Lua = { diagnostics = { globals = { "vim" } } } }
-					end
-					return opts
-				end
+          if server_name == "emmet_ls" or server_name == "emmet_language_server" then
+            opts.filetypes = {
+              "html",
+              "css",
+              "scss",
+              "less",
+              "javascript",
+              "javascriptreact",
+              "typescript",
+              "typescriptreact",
+              "svelte",
+              "vue",
+            }
+          end
 
-				if use_native then
-					for _, server in ipairs(enable) do
-						pcall(vim.lsp.config, server, mk_opts(server))
-					end
-					if #enable > 0 then
-						pcall(vim.lsp.enable, enable)
-					end
-					return
-				end
+          opts.capabilities = merge_capabilities(caps, opts.capabilities)
 
-				local ok_lspconfig, lspconfig = pcall(require, "lspconfig")
-				if not ok_lspconfig then
-					return
-				end
+          if vim.lsp and vim.lsp.enable and vim.lsp.config then
+            pcall(function()
+              vim.lsp.config(server_name, opts)
+            end)
+            pcall(function()
+              vim.lsp.enable(server_name)
+            end)
+            return
+          end
 
-				for _, server in ipairs(enable) do
-					if lspconfig[server] and type(lspconfig[server].setup) == "function" then
-						lspconfig[server].setup(mk_opts(server))
-					end
-				end
-			end,
-		},
-		{ "neovim/nvim-lspconfig" },
-	}
+          local ok, lspconfig = pcall(require, "lspconfig")
+          if not ok then
+            return
+          end
+          local server = lspconfig[server_name]
+          if server and server.setup then
+            pcall(server.setup, opts)
+          end
+        end
+
+        for _, server_name in ipairs(servers) do
+          setup_server(server_name)
+        end
+
+        vim.api.nvim_create_autocmd("LspAttach", {
+          callback = function(args)
+            local buf = args.buf
+            vim.keymap.set("n", "K", vim.lsp.buf.hover, { buffer = buf, desc = "LSP Hover" })
+            vim.keymap.set("n", "gd", vim.lsp.buf.definition, { buffer = buf, desc = "LSP Definition" })
+            vim.keymap.set("n", "gr", vim.lsp.buf.references, { buffer = buf, desc = "LSP References" })
+            vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, { buffer = buf, desc = "LSP Rename" })
+          end,
+        })
+      end,
+    },
+  }
 end
 
 return M
