@@ -18,118 +18,17 @@ func setFormLabelWidth(form *tview.Form, width int) {
 	}
 }
 
-func setFocusHelp(p any, fn func()) {
-	type focusSetter interface {
-		SetFocusFunc(func()) *tview.Box
-	}
-	if f, ok := p.(focusSetter); ok {
-		f.SetFocusFunc(fn)
-	}
-}
-
-func attachSettingsHelp(w *Wizard, form *tview.Form, key string) {
-	if w == nil || form == nil {
-		return
-	}
-	idx := form.GetFormItemCount() - 1
-	if idx < 0 {
-		return
-	}
-	item := form.GetFormItem(idx)
-	setFocusHelp(item, func() {
-		w.showSettingsFieldHelp(key)
-	})
-}
-
 func (w *Wizard) pageSettings() tview.Primitive {
-	fields := tview.NewForm()
-	fields.SetBorder(true)
-	fields.SetTitle("Settings")
+	form := tview.NewForm()
+	form.SetBorder(true)
+	form.SetTitle("Settings")
 
 	w.settingsInfo = tview.NewTextView()
 	w.settingsInfo.SetDynamicColors(true)
 	w.settingsInfo.SetBorder(true)
 	w.settingsInfo.SetTitle("Info")
 
-	setFormLabelWidth(fields, 30)
-	fieldWidth := 24
-
-	profileNames, err := profile.ListProfiles()
-	if err != nil || len(profileNames) == 0 {
-		profileNames = []string{"default"}
-	}
-
-	state, _ := profile.LoadState()
-	currentName := strings.TrimSpace(state.Current)
-	if currentName == "" {
-		currentName = "default"
-	}
-
-	profileIndex := 0
-	for i, name := range profileNames {
-		if name == currentName {
-			profileIndex = i
-			break
-		}
-	}
-
-	profileInit := true
-	fields.AddDropDown("Profile", profileNames, profileIndex, func(_ string, index int) {
-		if profileInit {
-			return
-		}
-		if index < 0 || index >= len(profileNames) {
-			return
-		}
-		selected := profileNames[index]
-		if strings.TrimSpace(selected) == "" {
-			return
-		}
-		if selected == currentName {
-			return
-		}
-
-		p, _, loadErr := profile.LoadByName(selected, w.cat)
-		if loadErr != nil {
-			return
-		}
-		w.p = p
-		_ = profile.SetCurrent(selected)
-
-		w.app.QueueUpdateDraw(func() {
-			w.pages.RemovePage("settings")
-			w.pages.AddPage("settings", w.pageSettings(), true, false)
-			w.pages.SwitchToPage("settings")
-			w.app.SetFocus(w.pages)
-		})
-	})
-	attachSettingsHelp(w, fields, "profile")
-	profileInit = false
-
-	targetLabels := []string{"default config", "safe build"}
-	targetIndex := 0
-	if strings.ToLower(strings.TrimSpace(w.p.Target)) == "safe" {
-		targetIndex = 1
-	}
-	fields.AddDropDown("Target", targetLabels, targetIndex, func(_ string, index int) {
-		if index == 1 {
-			w.p.Target = "safe"
-		} else {
-			w.p.Target = "default"
-		}
-		w.p.Normalize(w.cat)
-		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("target")
-	})
-	attachSettingsHelp(w, fields, "target")
-
-	fields.AddInputField("Build name", w.p.AppName, fieldWidth, nil, func(text string) {
-		w.p.AppName = strings.TrimSpace(text)
-		w.p.Normalize(w.cat)
-		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("build_name")
-	})
-	attachSettingsHelp(w, fields, "build_name")
+	setFormLabelWidth(form, 30)
 
 	presetIDs := make([]string, 0, len(w.cat.Presets))
 	for id := range w.cat.Presets {
@@ -140,62 +39,92 @@ func (w *Wizard) pageSettings() tview.Primitive {
 	presetLabels := make([]string, 0, len(presetIDs))
 	presetIndex := 0
 	for i, id := range presetIDs {
-		preset := w.cat.Presets[id]
-		presetLabels = append(presetLabels, preset.Title)
+		pr := w.cat.Presets[id]
+		presetLabels = append(presetLabels, pr.Title)
 		if id == w.p.Preset {
 			presetIndex = i
 		}
 	}
-	fields.AddDropDown("Preset", presetLabels, presetIndex, func(_ string, index int) {
+
+	targetLabels := []string{"safe build (recommended)", "system config (~/.config/nvim)"}
+	targetIndex := 0
+	if strings.ToLower(strings.TrimSpace(w.p.Target)) == "default" {
+		targetIndex = 1
+	}
+	form.AddDropDown("Target", targetLabels, targetIndex, func(_ string, index int) {
+		desired := "safe"
+		if index == 1 {
+			desired = "default"
+		}
+		cur := strings.ToLower(strings.TrimSpace(w.p.Target))
+		if desired != cur {
+			w.p.Target = desired
+			w.p.Normalize(w.cat)
+			_ = profile.Save(w.p)
+
+			w.pages.RemovePage("settings")
+			w.pages.AddPage("settings", w.pageSettings(), true, true)
+			w.gotoPage("settings")
+			return
+		}
+		w.updateSettingsInfo()
+	})
+
+	fieldWidth := 24
+	if strings.ToLower(strings.TrimSpace(w.p.Target)) == "safe" {
+		form.AddInputField("Build name", w.p.AppName, fieldWidth, nil, func(text string) {
+			w.p.AppName = strings.TrimSpace(text)
+			w.p.Normalize(w.cat)
+			_ = profile.Save(w.p)
+			w.updateSettingsInfo()
+		})
+	}
+
+	form.AddDropDown("Preset", presetLabels, presetIndex, func(_ string, index int) {
 		if index < 0 || index >= len(presetIDs) {
 			return
 		}
-		id := presetIDs[index]
-		w.applyPreset(id)
-		w.showSettingsFieldHelp("preset")
+		w.applyPreset(presetIDs[index])
+		w.updateSettingsInfo()
 	})
-	attachSettingsHelp(w, fields, "preset")
 
-	modeLabels := []string{"managed", "integrate"}
-	modeIndex := 0
-	if w.p.ConfigMode == "integrate" {
-		modeIndex = 1
-	}
-	fields.AddDropDown("Config mode", modeLabels, modeIndex, func(_ string, index int) {
-		if index == 1 {
-			w.p.ConfigMode = "integrate"
-		} else {
-			w.p.ConfigMode = "managed"
+	if strings.ToLower(strings.TrimSpace(w.p.Target)) == "default" {
+		modeLabels := []string{"managed", "integrate"}
+		modeIndex := 0
+		if w.p.ConfigMode == "integrate" {
+			modeIndex = 1
 		}
-		w.p.Normalize(w.cat)
-		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("config_mode")
-	})
-	attachSettingsHelp(w, fields, "config_mode")
+		form.AddDropDown("Config mode", modeLabels, modeIndex, func(_ string, index int) {
+			if index == 1 {
+				w.p.ConfigMode = "integrate"
+			} else {
+				w.p.ConfigMode = "managed"
+			}
+			w.p.Normalize(w.cat)
+			_ = profile.Save(w.p)
+			w.updateSettingsInfo()
+		})
+	}
 
-	fields.AddInputField("Projects dir", w.p.ProjectsDir, fieldWidth, nil, func(text string) {
+	form.AddInputField("Projects dir", w.p.ProjectsDir, fieldWidth, nil, func(text string) {
 		w.p.ProjectsDir = strings.TrimSpace(text)
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("projects_dir")
+		w.updateSettingsInfo()
 	})
-	attachSettingsHelp(w, fields, "projects_dir")
 
-	fields.AddInputField("Leader", w.p.Leader, fieldWidth, nil, func(text string) {
+	form.AddInputField("Leader", w.p.Leader, fieldWidth, nil, func(text string) {
 		w.p.Leader = text
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("leader")
+		w.updateSettingsInfo()
 	})
-	attachSettingsHelp(w, fields, "leader")
-
-	fields.AddInputField("Local leader", w.p.LocalLeader, fieldWidth, nil, func(text string) {
+	form.AddInputField("Local leader", w.p.LocalLeader, fieldWidth, nil, func(text string) {
 		w.p.LocalLeader = text
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("local_leader")
+		w.updateSettingsInfo()
 	})
-	attachSettingsHelp(w, fields, "local_leader")
 
 	verifyLabels := []string{"auto", "require", "off"}
 	verifyIndex := 0
@@ -205,41 +134,36 @@ func (w *Wizard) pageSettings() tview.Primitive {
 			break
 		}
 	}
-	fields.AddDropDown("Verify", verifyLabels, verifyIndex, func(_ string, index int) {
+	form.AddDropDown("Verify", verifyLabels, verifyIndex, func(_ string, index int) {
 		if index >= 0 && index < len(verifyLabels) {
 			w.p.Verify = verifyLabels[index]
+			w.p.Normalize(w.cat)
+			_ = profile.Save(w.p)
 		}
-		w.p.Normalize(w.cat)
-		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("verify")
+		w.updateSettingsInfo()
 	})
-	attachSettingsHelp(w, fields, "verify")
 
-	buttons := tview.NewForm()
-	buttons.AddButton("Back", func() { w.gotoPage("welcome") })
-	buttons.AddButton("Save", func() {
+	form.AddButton("Back", func() { w.gotoPage("welcome") })
+	form.AddButton("Save", func() {
+		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
 		w.updateSettingsInfo()
 	})
-	buttons.AddButton("Next", func() {
+	form.AddButton("Next", func() {
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
 		w.gotoPage("features")
 	})
-	buttons.SetButtonsAlign(tview.AlignCenter)
+	form.SetButtonsAlign(tview.AlignCenter)
 
 	w.updateSettingsInfo()
 
-	left := tview.NewFlex().SetDirection(tview.FlexRow)
-	left.AddItem(fields, 0, 1, true)
-	left.AddItem(buttons, 3, 0, false)
+	leftRight := tview.NewFlex()
+	leftRight.AddItem(form, 0, 2, true)
+	leftRight.AddItem(w.settingsInfo, 0, 3, false)
 
-	right := tview.NewFlex().SetDirection(tview.FlexRow)
-	right.AddItem(w.settingsInfo, 0, 2, false)
-	right.AddItem(w.systemInfoView(), 0, 1, false)
-
-	main := tview.NewFlex()
-	main.AddItem(left, 0, 2, true)
-	main.AddItem(right, 0, 3, false)
-	return main
+	wrap := tview.NewFlex().SetDirection(tview.FlexRow)
+	wrap.AddItem(leftRight, 0, 1, true)
+	wrap.AddItem(w.systemInfoView(), 12, 0, false)
+	return wrap
 }
