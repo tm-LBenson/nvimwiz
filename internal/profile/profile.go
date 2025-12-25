@@ -12,17 +12,12 @@ import (
 	"nvimwiz/internal/catalog"
 )
 
-// CurrentVersion is the on-disk schema version for Profile JSON files.
 const CurrentVersion = 2
 
-// State tracks the user's current profile selection.
-// Stored at ~/.config/nvimwiz/state.json (or $XDG_CONFIG_HOME/nvimwiz/state.json).
 type State struct {
 	Current string `json:"current"`
 }
 
-// Profile is a saved configuration profile.
-// Each profile is stored as JSON under ~/.config/nvimwiz/profiles/<name>.json.
 type Profile struct {
 	Version     int               `json:"version"`
 	Name        string            `json:"name"`
@@ -38,8 +33,6 @@ type Profile struct {
 	AppName     string            `json:"appName"`
 }
 
-// Load loads the current profile (based on State.Current).
-// The bool return indicates whether the profile file existed on disk.
 func Load(cat catalog.Catalog) (Profile, bool, error) {
 	name, p, ok, err := LoadCurrent(cat)
 	if err != nil {
@@ -49,7 +42,6 @@ func Load(cat catalog.Catalog) (Profile, bool, error) {
 	return p, ok, nil
 }
 
-// Save saves the current profile (based on State.Current).
 func Save(p Profile) error {
 	st, err := LoadState()
 	if err != nil {
@@ -62,8 +54,6 @@ func Save(p Profile) error {
 	return SaveAs(name, p)
 }
 
-// LoadCurrent loads the active profile.
-// Returns (name, profile, existed).
 func LoadCurrent(cat catalog.Catalog) (string, Profile, bool, error) {
 	if err := migrateLegacyProfileIfNeeded(cat); err != nil {
 		return "", Profile{}, false, err
@@ -73,6 +63,7 @@ func LoadCurrent(cat catalog.Catalog) (string, Profile, bool, error) {
 	if err != nil {
 		return "", Profile{}, false, err
 	}
+
 	name := sanitizeProfileName(st.Current)
 	if name == "" {
 		name = "default"
@@ -86,18 +77,18 @@ func LoadCurrent(cat catalog.Catalog) (string, Profile, bool, error) {
 	return name, p, ok, nil
 }
 
-
 func LoadByName(name string, cat catalog.Catalog) (Profile, bool, error) {
 	name = sanitizeProfileName(name)
 	if name == "" {
 		name = "default"
 	}
-	pth, err := profilePath(name)
+
+	path, err := profilePath(name)
 	if err != nil {
 		return Profile{}, false, err
 	}
 
-	b, err := os.ReadFile(pth)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			p := Default(cat)
@@ -109,7 +100,6 @@ func LoadByName(name string, cat catalog.Catalog) (Profile, bool, error) {
 
 	var p Profile
 	if err := json.Unmarshal(b, &p); err != nil {
-		// Corrupt JSON -> reset to defaults but signal that it existed.
 		p = Default(cat)
 		p.Name = name
 		return p, true, nil
@@ -120,7 +110,6 @@ func LoadByName(name string, cat catalog.Catalog) (Profile, bool, error) {
 	return p, true, nil
 }
 
-// SaveAs saves the profile under the provided name.
 func SaveAs(name string, p Profile) error {
 	name = sanitizeProfileName(name)
 	if name == "" {
@@ -128,13 +117,12 @@ func SaveAs(name string, p Profile) error {
 	}
 	p.Name = name
 
-	pth, err := profilePath(name)
+	path, err := profilePath(name)
 	if err != nil {
 		return err
 	}
 
-	dir := filepath.Dir(pth)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 
@@ -147,20 +135,20 @@ func SaveAs(name string, p Profile) error {
 		return err
 	}
 	b = append(b, '\n')
-	return os.WriteFile(pth, b, 0o644)
+	return os.WriteFile(path, b, 0o644)
 }
 
-// ListProfiles returns all saved profile names.
 func ListProfiles() ([]string, error) {
 	if err := ensureDirs(); err != nil {
 		return nil, err
 	}
-	dir, err := profilesDir()
+
+	path, err := profilesDir()
 	if err != nil {
 		return nil, err
 	}
 
-	entries, err := os.ReadDir(dir)
+	entries, err := os.ReadDir(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return []string{"default"}, nil
@@ -188,24 +176,25 @@ func ListProfiles() ([]string, error) {
 			out = append(out, base)
 		}
 	}
+
 	if !seen["default"] {
 		out = append(out, "default")
 	}
+
 	sort.Strings(out)
 	return out, nil
 }
 
-// Exists reports whether the named profile file exists.
 func Exists(name string) (bool, error) {
 	name = sanitizeProfileName(name)
 	if name == "" {
 		return false, nil
 	}
-	pth, err := profilePath(name)
+	path, err := profilePath(name)
 	if err != nil {
 		return false, err
 	}
-	_, err = os.Stat(pth)
+	_, err = os.Stat(path)
 	if err == nil {
 		return true, nil
 	}
@@ -215,7 +204,6 @@ func Exists(name string) (bool, error) {
 	return false, err
 }
 
-// Delete removes a profile. The "default" profile cannot be deleted.
 func Delete(name string) error {
 	name = sanitizeProfileName(name)
 	if name == "" {
@@ -225,11 +213,11 @@ func Delete(name string) error {
 		return fmt.Errorf("cannot delete default profile")
 	}
 
-	pth, err := profilePath(name)
+	path, err := profilePath(name)
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(pth); err != nil {
+	if err := os.Remove(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
@@ -245,7 +233,6 @@ func Delete(name string) error {
 	return nil
 }
 
-// Clone creates dst as a copy of src.
 func Clone(src, dst string, cat catalog.Catalog) error {
 	src = sanitizeProfileName(src)
 	dst = sanitizeProfileName(dst)
@@ -256,9 +243,11 @@ func Clone(src, dst string, cat catalog.Catalog) error {
 		return fmt.Errorf("source and destination are the same")
 	}
 
-	if ok, err := Exists(dst); err != nil {
+	ok, err := Exists(dst)
+	if err != nil {
 		return err
-	} else if ok {
+	}
+	if ok {
 		return fmt.Errorf("profile %q already exists", dst)
 	}
 
@@ -271,16 +260,13 @@ func Clone(src, dst string, cat catalog.Catalog) error {
 	}
 
 	p.Name = dst
-	// Avoid NVIM_APPNAME collisions for safe builds.
 	if strings.ToLower(strings.TrimSpace(p.Target)) == "safe" {
 		p.AppName = ""
 	}
 	p.Normalize(cat)
-
 	return SaveAs(dst, p)
 }
 
-// Rename renames a profile file and updates state.json if needed.
 func Rename(oldName, newName string, cat catalog.Catalog) error {
 	oldName = sanitizeProfileName(oldName)
 	newName = sanitizeProfileName(newName)
@@ -293,9 +279,12 @@ func Rename(oldName, newName string, cat catalog.Catalog) error {
 	if oldName == newName {
 		return nil
 	}
-	if ok, err := Exists(newName); err != nil {
+
+	ok, err := Exists(newName)
+	if err != nil {
 		return err
-	} else if ok {
+	}
+	if ok {
 		return fmt.Errorf("profile %q already exists", newName)
 	}
 
@@ -307,11 +296,8 @@ func Rename(oldName, newName string, cat catalog.Catalog) error {
 		return fmt.Errorf("profile %q not found", oldName)
 	}
 
-	// Write a new file under the new name (so we can also update internal fields).
 	p.Name = newName
 	if strings.ToLower(strings.TrimSpace(p.Target)) == "safe" {
-		// If appname was the default for the old profile, clear it so the new
-		// profile gets its own default name.
 		if sanitizeAppName(p.AppName) == sanitizeAppName(defaultAppName(oldName)) {
 			p.AppName = ""
 		}
@@ -321,7 +307,6 @@ func Rename(oldName, newName string, cat catalog.Catalog) error {
 		return err
 	}
 
-	// Remove the old file.
 	oldPath, err := profilePath(oldName)
 	if err == nil {
 		_ = os.Remove(oldPath)
@@ -336,50 +321,27 @@ func Rename(oldName, newName string, cat catalog.Catalog) error {
 	return nil
 }
 
-func stateFilePath() (string, error) {
-	if xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdgConfigHome != "" {
-		return filepath.Join(xdgConfigHome, "nvimwiz", "state.json"), nil
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(homeDir, ".config", "nvimwiz", "state.json"), nil
-}
-
-
-func stateDir() (string, error) {
-	if xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); xdgConfigHome != "" {
-		return filepath.Join(xdgConfigHome, "nvimwiz"), nil
-	}
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(homeDir, ".config", "nvimwiz"), nil
-}
 func LoadState() (State, error) {
 	if err := ensureDirs(); err != nil {
 		return State{}, err
 	}
-	pth, err := statePath()
+	path, err := statePath()
 	if err != nil {
 		return State{}, err
 	}
-	b, err := os.ReadFile(pth)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return State{Current: "default"}, nil
 		}
 		return State{}, err
 	}
+
 	var st State
 	if err := json.Unmarshal(b, &st); err != nil {
 		return State{Current: "default"}, nil
 	}
-	if strings.TrimSpace(st.Current) == "" {
-		st.Current = "default"
-	}
+
 	st.Current = sanitizeProfileName(st.Current)
 	if st.Current == "" {
 		st.Current = "default"
@@ -387,30 +349,30 @@ func LoadState() (State, error) {
 	return st, nil
 }
 
-// SetCurrent updates ~/.config/nvimwiz/state.json.
 func SetCurrent(name string) error {
 	name = sanitizeProfileName(name)
 	if name == "" {
 		name = "default"
 	}
+
 	if err := ensureDirs(); err != nil {
 		return err
 	}
-	pth, err := statePath()
+	path, err := statePath()
 	if err != nil {
 		return err
 	}
-	dir := filepath.Dir(pth)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+
 	st := State{Current: name}
 	b, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
 	b = append(b, '\n')
-	return os.WriteFile(pth, b, 0o644)
+	return os.WriteFile(path, b, 0o644)
 }
 
 func BackupsDir() (string, error) {
@@ -420,7 +382,6 @@ func BackupsDir() (string, error) {
 	}
 	return filepath.Join(root, "backups"), nil
 }
-
 
 func BaseDir() (string, error) {
 	return baseDir()
@@ -465,6 +426,7 @@ func Default(cat catalog.Catalog) Profile {
 		Target:      "safe",
 		AppName:     "",
 	}
+
 	if pr, ok := cat.Presets[p.Preset]; ok {
 		for featureID, enabled := range pr.Features {
 			p.Features[featureID] = enabled
@@ -473,6 +435,7 @@ func Default(cat catalog.Catalog) Profile {
 			p.Choices[choiceKey] = choiceValue
 		}
 	}
+
 	p.Normalize(cat)
 	return p
 }
@@ -481,6 +444,7 @@ func (p *Profile) Normalize(cat catalog.Catalog) {
 	if p.Version == 0 {
 		p.Version = CurrentVersion
 	}
+
 	p.Name = sanitizeProfileName(p.Name)
 	if p.Name == "" {
 		p.Name = "default"
@@ -551,13 +515,13 @@ func (p *Profile) Normalize(cat catalog.Catalog) {
 		}
 	}
 
-	if p.Target == "default" {
-		p.AppName = "nvim"
-	} else {
+	if p.Target == "safe" {
 		p.AppName = sanitizeAppName(p.AppName)
 		if p.AppName == "" || p.AppName == "nvim" {
 			p.AppName = defaultAppName(p.Name)
 		}
+	} else {
+		p.AppName = "nvim"
 	}
 
 	for featureID, enabled := range p.Features {
@@ -701,10 +665,33 @@ func migrateLegacyProfileIfNeeded(cat catalog.Catalog) error {
 		return err
 	}
 
-	if names, err := ListProfiles(); err == nil && len(names) > 0 {
-		if _, err := os.Stat(must(statePath())); err != nil {
-			_ = SetCurrent("default")
+	dir, err := profilesDir()
+	if err != nil {
+		return err
+	}
+
+	hasAnyProfileFile := false
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, ent := range entries {
+			if ent.IsDir() {
+				continue
+			}
+			if strings.HasSuffix(ent.Name(), ".json") {
+				hasAnyProfileFile = true
+				break
+			}
 		}
+	}
+
+	stateFile, err := statePath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(stateFile); err != nil {
+		_ = SetCurrent("default")
+	}
+
+	if hasAnyProfileFile {
 		return ensureDefaultProfile(cat)
 	}
 
@@ -712,10 +699,10 @@ func migrateLegacyProfileIfNeeded(cat catalog.Catalog) error {
 	if err != nil {
 		return err
 	}
+
 	b, err := os.ReadFile(legacy)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			_ = SetCurrent("default")
 			return ensureDefaultProfile(cat)
 		}
 		return err
@@ -731,7 +718,6 @@ func migrateLegacyProfileIfNeeded(cat catalog.Catalog) error {
 		return err
 	}
 	_ = SetCurrent("default")
-	// Keep legacy file as a backup. We don't delete it.
 	return nil
 }
 
@@ -747,11 +733,4 @@ func ensureDefaultProfile(cat catalog.Catalog) error {
 	p.Name = "default"
 	p.Normalize(cat)
 	return SaveAs("default", p)
-}
-
-func must(pth string, err error) string {
-	if err != nil {
-		return ""
-	}
-	return pth
 }

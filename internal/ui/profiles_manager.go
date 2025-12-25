@@ -11,7 +11,6 @@ import (
 	"nvimwiz/internal/profile"
 )
 
-
 func (w *Wizard) openProfilesManager() {
 	const pageName = "profiles_manager"
 
@@ -50,7 +49,7 @@ func (w *Wizard) buildProfilesManagerView() tview.Primitive {
 			w.pages.RemovePage("profiles_manager_msg")
 			w.app.SetFocus(list)
 		})
-		w.pages.AddPage("profiles_manager_msg", centered(modal, 60, 12), true, true)
+		w.pages.AddPage("profiles_manager_msg", overlayCentered(modal, 60, 12), true, true)
 		w.app.SetFocus(modal)
 	}
 
@@ -64,7 +63,7 @@ func (w *Wizard) buildProfilesManagerView() tview.Primitive {
 				onYes()
 			}
 		})
-		w.pages.AddPage("profiles_manager_confirm", centered(modal, 70, 12), true, true)
+		w.pages.AddPage("profiles_manager_confirm", overlayCentered(modal, 70, 12), true, true)
 		w.app.SetFocus(modal)
 	}
 
@@ -85,12 +84,11 @@ func (w *Wizard) buildProfilesManagerView() tview.Primitive {
 			onOK(text)
 		})
 		form.SetButtonsAlign(tview.AlignCenter)
-		w.pages.AddPage("profiles_manager_prompt", centered(form, 70, 14), true, true)
+		w.pages.AddPage("profiles_manager_prompt", overlayCentered(form, 70, 14), true, true)
 		w.app.SetFocus(form)
 	}
 
 	rebuildAfterSwitch := func() {
-		// Settings and features pages are built from w.p, so rebuild them.
 		w.pages.RemovePage("settings")
 		w.pages.AddPage("settings", w.pageSettings(), true, false)
 
@@ -104,6 +102,7 @@ func (w *Wizard) buildProfilesManagerView() tview.Primitive {
 			detail.SetText(err.Error())
 			return
 		}
+
 		lines := []string{}
 		lines = append(lines, "Name: "+profileName)
 		lines = append(lines, "Preset: "+p.Preset)
@@ -238,6 +237,7 @@ func (w *Wizard) buildProfilesManagerView() tview.Primitive {
 				showMessage("New profile", err.Error())
 				return
 			}
+
 			w.p = p
 			rebuildAfterSwitch()
 			reload(name)
@@ -285,7 +285,6 @@ func (w *Wizard) buildProfilesManagerView() tview.Primitive {
 				return
 			}
 
-			// If we renamed the active profile, we should reload it into the wizard.
 			st, _ := profile.LoadState()
 			if strings.TrimSpace(st.Current) == newName {
 				p, _, err := profile.LoadByName(newName, w.cat)
@@ -314,11 +313,11 @@ func (w *Wizard) buildProfilesManagerView() tview.Primitive {
 				return
 			}
 
-		_, p, _, err := profile.LoadCurrent(w.cat)
-		if err == nil {
-			w.p = p
-			rebuildAfterSwitch()
-		}
+			_, p, _, err := profile.LoadCurrent(w.cat)
+			if err == nil {
+				w.p = p
+				rebuildAfterSwitch()
+			}
 			reload("")
 		})
 	})
@@ -338,14 +337,12 @@ func (w *Wizard) buildProfilesManagerView() tview.Primitive {
 	wrap.AddItem(flex, 0, 1, true)
 	wrap.AddItem(buttons, 3, 0, false)
 
-	// First load.
 	reload("")
 
 	return wrap
 }
 
-// centered wraps a primitive with flexible padding so it appears centered.
-func centered(p tview.Primitive, width, height int) tview.Primitive {
+func overlayCentered(p tview.Primitive, width, height int) tview.Primitive {
 	row := tview.NewFlex()
 	row.AddItem(nil, 0, 1, false)
 	row.AddItem(p, width, 0, true)

@@ -9,24 +9,6 @@ import (
 	"nvimwiz/internal/profile"
 )
 
-func setFormLabelWidth(form *tview.Form, width int) {
-	type labelWidther interface {
-		SetLabelWidth(int) *tview.Form
-	}
-	if f, ok := interface{}(form).(labelWidther); ok {
-		f.SetLabelWidth(width)
-	}
-}
-
-func setFocusHelp(p any, fn func()) {
-	type focusSetter interface {
-		SetFocusFunc(func()) *tview.Box
-	}
-	if f, ok := p.(focusSetter); ok {
-		f.SetFocusFunc(fn)
-	}
-}
-
 func attachSettingsHelp(w *Wizard, form *tview.Form, key string) {
 	if w == nil || form == nil {
 		return
@@ -42,69 +24,66 @@ func attachSettingsHelp(w *Wizard, form *tview.Form, key string) {
 }
 
 func (w *Wizard) pageSettings() tview.Primitive {
+	fieldWidth := 28
+
+	if w.settingsInfo == nil {
+		w.settingsInfo = tview.NewTextView().SetDynamicColors(true)
+		w.settingsInfo.SetBorder(true)
+		w.settingsInfo.SetTitle("Info")
+	}
+
+	initializing := true
+
 	fields := tview.NewForm()
 	fields.SetBorder(true)
 	fields.SetTitle("Settings")
+	fields.SetButtonsAlign(tview.AlignCenter)
 
-	w.settingsInfo = tview.NewTextView()
-	w.settingsInfo.SetDynamicColors(true)
-	w.settingsInfo.SetBorder(true)
-	w.settingsInfo.SetTitle("Info")
-
-	setFormLabelWidth(fields, 30)
-	fieldWidth := 24
-
-	profileNames, err := profile.ListProfiles()
-	if err != nil || len(profileNames) == 0 {
-		profileNames = []string{"default"}
+	selectedProfile := strings.TrimSpace(w.p.Name)
+	if selectedProfile == "" {
+		selectedProfile = "default"
 	}
 
-	state, _ := profile.LoadState()
-	currentName := strings.TrimSpace(state.Current)
-	if currentName == "" {
-		currentName = "default"
+	profileNames, err := profile.ListProfiles()
+	if err != nil {
+		w.settingsInfo.SetText(err.Error())
+		return fields
 	}
 
 	profileIndex := 0
 	for i, name := range profileNames {
-		if name == currentName {
+		if name == selectedProfile {
 			profileIndex = i
 			break
 		}
 	}
 
-	profileInit := true
 	fields.AddDropDown("Profile", profileNames, profileIndex, func(_ string, index int) {
-		if profileInit {
+		if initializing {
 			return
 		}
 		if index < 0 || index >= len(profileNames) {
 			return
 		}
-		selected := profileNames[index]
-		if strings.TrimSpace(selected) == "" {
-			return
-		}
-		if selected == currentName {
-			return
-		}
+		name := profileNames[index]
 
-		p, _, loadErr := profile.LoadByName(selected, w.cat)
+		p, _, loadErr := profile.LoadByName(name, w.cat)
 		if loadErr != nil {
+			w.settingsInfo.SetText(loadErr.Error())
 			return
 		}
+		p.Name = name
 		w.p = p
-		_ = profile.SetCurrent(selected)
+		_ = profile.SetCurrent(name)
 
-		w.app.QueueUpdateDraw(func() {
-			w.pages.RemovePage("settings")
-			w.pages.AddPage("settings", w.pageSettings(), true, false)
-			w.pages.SwitchToPage("settings")
-			w.app.SetFocus(w.pages)
-		})
+		w.pages.RemovePage("features")
+		w.pages.AddPage("features", w.pageFeatures(), true, false)
+		w.pages.RemovePage("settings")
+		w.pages.AddPage("settings", w.pageSettings(), true, false)
+		w.pages.SwitchToPage("settings")
+		w.updateSettingsInfo()
 	})
 	attachSettingsHelp(w, fields, "profile")
-	profileInit = false
 
 	targetLabels := []string{"safe build (recommended)", "system config"}
 	targetIndex := 0
@@ -112,66 +91,99 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		targetIndex = 1
 	}
 	fields.AddDropDown("Target", targetLabels, targetIndex, func(_ string, index int) {
-		if index == 0 {
-			w.p.Target = "safe"
-		} else {
+		if initializing {
+			return
+		}
+		if index == 1 {
 			w.p.Target = "default"
+		} else {
+			w.p.Target = "safe"
 		}
 		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("target")
+		w.pages.RemovePage("settings")
+		w.pages.AddPage("settings", w.pageSettings(), true, false)
+		w.pages.SwitchToPage("settings")
+		w.updateSettingsInfo()
 	})
 	attachSettingsHelp(w, fields, "target")
 
-	fields.AddInputField("Build name", w.p.AppName, fieldWidth, nil, func(text string) {
-		w.p.AppName = strings.TrimSpace(text)
-		w.p.Normalize(w.cat)
-		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("build_name")
-	})
-	attachSettingsHelp(w, fields, "build_name")
-
-	presetIDs := make([]string, 0, len(w.cat.Presets))
-	for id := range w.cat.Presets {
-		presetIDs = append(presetIDs, id)
+	if strings.ToLower(strings.TrimSpace(w.p.Target)) == "safe" {
+		fields.AddInputField("Build name", w.p.AppName, fieldWidth, nil, func(text string) {
+			w.p.AppName = strings.TrimSpace(text)
+			w.p.Normalize(w.cat)
+			_ = profile.Save(w.p)
+			w.showSettingsFieldHelp("build_name")
+		})
+		attachSettingsHelp(w, fields, "build_name")
 	}
-	sort.Strings(presetIDs)
 
-	presetLabels := make([]string, 0, len(presetIDs))
+	presetLabels := []string{}
+	presetIDForLabel := map[string]string{}
+
+	for id, preset := range w.cat.Presets {
+		label := strings.TrimSpace(preset.Title)
+		if label == "" {
+			label = id
+		}
+		presetLabels = append(presetLabels, label)
+		presetIDForLabel[label] = id
+	}
+	sort.Strings(presetLabels)
+
 	presetIndex := 0
-	for i, id := range presetIDs {
-		preset := w.cat.Presets[id]
-		presetLabels = append(presetLabels, preset.Title)
-		if id == w.p.Preset {
+	currentPreset := strings.TrimSpace(w.p.Preset)
+	if currentPreset == "" {
+		currentPreset = "lazyvim"
+	}
+	for i, label := range presetLabels {
+		if presetIDForLabel[label] == currentPreset {
 			presetIndex = i
+			break
 		}
 	}
-	fields.AddDropDown("Preset", presetLabels, presetIndex, func(_ string, index int) {
-		if index < 0 || index >= len(presetIDs) {
+
+	fields.AddDropDown("Preset", presetLabels, presetIndex, func(option string, _ int) {
+		if initializing {
 			return
 		}
-		id := presetIDs[index]
-		w.applyPreset(id)
+		presetID := presetIDForLabel[option]
+		if strings.TrimSpace(presetID) == "" {
+			presetID = "lazyvim"
+		}
+		w.p.Preset = presetID
+		w.p.Normalize(w.cat)
+		w.applyPreset(presetID)
+		_ = profile.Save(w.p)
+
+		w.pages.RemovePage("features")
+		w.pages.AddPage("features", w.pageFeatures(), true, false)
+
 		w.showSettingsFieldHelp("preset")
 	})
 	attachSettingsHelp(w, fields, "preset")
 
-	modeLabels := []string{"managed", "integrate"}
-	modeIndex := 0
-	if w.p.ConfigMode == "integrate" {
-		modeIndex = 1
-	}
-	fields.AddDropDown("Config mode", modeLabels, modeIndex, func(_ string, index int) {
-		if index == 1 {
-			w.p.ConfigMode = "integrate"
-		} else {
-			w.p.ConfigMode = "managed"
+	if strings.ToLower(strings.TrimSpace(w.p.Target)) == "default" {
+		configModeLabels := []string{"managed", "integrate"}
+		configModeIndex := 0
+		if strings.ToLower(strings.TrimSpace(w.p.ConfigMode)) == "integrate" {
+			configModeIndex = 1
 		}
-		w.p.Normalize(w.cat)
-		_ = profile.Save(w.p)
-		w.showSettingsFieldHelp("config_mode")
-	})
-	attachSettingsHelp(w, fields, "config_mode")
+		fields.AddDropDown("Config mode", configModeLabels, configModeIndex, func(_ string, index int) {
+			if initializing {
+				return
+			}
+			if index == 1 {
+				w.p.ConfigMode = "integrate"
+			} else {
+				w.p.ConfigMode = "managed"
+			}
+			w.p.Normalize(w.cat)
+			_ = profile.Save(w.p)
+			w.showSettingsFieldHelp("config_mode")
+		})
+		attachSettingsHelp(w, fields, "config_mode")
+	}
 
 	fields.AddInputField("Projects dir", w.p.ProjectsDir, fieldWidth, nil, func(text string) {
 		w.p.ProjectsDir = strings.TrimSpace(text)
@@ -206,6 +218,9 @@ func (w *Wizard) pageSettings() tview.Primitive {
 		}
 	}
 	fields.AddDropDown("Verify", verifyLabels, verifyIndex, func(_ string, index int) {
+		if initializing {
+			return
+		}
 		if index >= 0 && index < len(verifyLabels) {
 			w.p.Verify = verifyLabels[index]
 		}
@@ -218,6 +233,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 	buttons := tview.NewForm()
 	buttons.AddButton("Back", func() { w.gotoPage("welcome") })
 	buttons.AddButton("Save", func() {
+		w.p.Normalize(w.cat)
 		_ = profile.Save(w.p)
 		w.updateSettingsInfo()
 	})
@@ -232,6 +248,7 @@ func (w *Wizard) pageSettings() tview.Primitive {
 	buttons.SetButtonsAlign(tview.AlignCenter)
 
 	w.updateSettingsInfo()
+	initializing = false
 
 	left := tview.NewFlex().SetDirection(tview.FlexRow)
 	left.AddItem(fields, 0, 1, true)

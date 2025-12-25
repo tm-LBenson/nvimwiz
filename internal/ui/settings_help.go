@@ -1,92 +1,129 @@
 package ui
 
-import (
-	"strings"
-
-	"nvimwiz/internal/profile"
-)
-
-func (w *Wizard) currentProfileName() string {
-	st, err := profile.LoadState()
-	if err == nil {
-		name := strings.TrimSpace(st.Current)
-		if name != "" {
-			return name
-		}
-	}
-	return "default"
-}
+import "strings"
 
 func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 	if w.settingsInfo == nil {
 		return
 	}
 
-	profileName := w.currentProfileName()
+	profileName := strings.TrimSpace(w.p.Name)
+	if profileName == "" {
+		profileName = "default"
+	}
 	target := strings.ToLower(strings.TrimSpace(w.p.Target))
 
 	lines := []string{}
 	switch fieldKey {
 	case "profile":
-		lines = append(lines, "Info: Profile", "")
-		lines = append(lines, "Profiles are saved sets of settings and feature choices.")
-		lines = append(lines, "Switching profiles lets you keep different Neovim builds and preferences.")
-		lines = append(lines, "", "Current: "+profileName)
+		lines = append(lines,
+			"Info: Profile",
+			"",
+			"Profiles are saved sets of settings and feature choices.",
+			"Use multiple profiles to keep different Neovim builds or workflows.",
+			"",
+			"Current: "+profileName,
+		)
 
 	case "target":
-		lines = append(lines, "Info: Target", "")
-		lines = append(lines, "system config writes to your normal ~/.config/nvim")
-		lines = append(lines, "safe build writes to ~/.config/<build name> and does not touch your current config")
-		lines = append(lines, "", "Current: "+target)
+		lines = append(lines,
+			"Info: Target",
+			"",
+			"safe build writes to ~/.config/<build name> and does not touch ~/.config/nvim.",
+			"system config writes to your normal ~/.config/nvim.",
+			"",
+			"Current: "+target,
+		)
 
 	case "build_name":
-		lines = append(lines, "Info: Build name", "")
-		lines = append(lines, "Used for safe builds only.")
-		lines = append(lines, "This becomes the folder name under ~/.config.")
-		lines = append(lines, "", "Build name: "+strings.TrimSpace(w.p.AppName))
-		lines = append(lines, "Effective app name: "+w.p.EffectiveAppName())
-		lines = append(lines, "")
-		if target == "safe" {
-			lines = append(lines, "Launch: NVIM_APPNAME="+w.p.EffectiveAppName()+" nvim")
-		} else {
-			lines = append(lines, "Launch: nvim")
-		}
+		lines = append(lines,
+			"Info: Build name",
+			"",
+			"Used for safe builds only.",
+			"This becomes the folder name under ~/.config.",
+			"",
+			"Build name: "+strings.TrimSpace(w.p.AppName),
+			"Effective app name: "+w.p.EffectiveAppName(),
+			"",
+			"Launch:",
+			"  NVIM_APPNAME="+w.p.EffectiveAppName()+" nvim",
+		)
 
 	case "preset":
-		lines = append(lines, "Info: Preset", "")
-		lines = append(lines, "A preset enables a curated set of features and defaults.")
-		lines = append(lines, "Use it to start from a known working baseline.")
-		lines = append(lines, "", "Current: "+w.p.Preset)
+		presetID := strings.TrimSpace(w.p.Preset)
+		presetDisplay := presetID
+		presetDesc := ""
+		if pr, ok := w.cat.Presets[presetID]; ok {
+			if strings.TrimSpace(pr.Title) != "" {
+				presetDisplay = pr.Title
+			}
+			presetDesc = strings.TrimSpace(pr.Short)
+		}
+
+		lines = append(lines,
+			"Info: Preset",
+			"",
+			"A preset is a curated baseline of defaults and features.",
+			"Pick one to start from a known working setup, then customize features.",
+			"",
+			"Current: "+presetDisplay,
+		)
+		if presetDesc != "" {
+			lines = append(lines, presetDesc)
+		}
 
 	case "config_mode":
-		lines = append(lines, "Info: Config mode", "")
-		lines = append(lines, "managed means nvimwiz owns init.lua and generated modules")
-		lines = append(lines, "integrate means you keep your init.lua and require nvimwiz.loader")
-		lines = append(lines, "", "Current: "+w.p.ConfigMode)
+		lines = append(lines,
+			"Info: Config mode",
+			"",
+			"managed means nvimwiz writes init.lua and generated modules for you.",
+			"integrate means you keep your init.lua and add a small loader require.",
+			"",
+			"Current: "+w.p.ConfigMode,
+		)
+		if target == "safe" {
+			lines = append(lines, "", "Note: safe builds are always managed.")
+		}
 
 	case "projects_dir":
-		lines = append(lines, "Info: Projects dir", "")
-		lines = append(lines, "Used by the Neovim start screen to list your projects.")
-		lines = append(lines, "Point it at the folder where you keep your repos.")
-		lines = append(lines, "", "Current: "+w.p.ProjectsDir)
+		lines = append(lines,
+			"Info: Projects dir",
+			"",
+			"Used by the start screen and pickers to list your projects.",
+			"Point it at the folder where you keep your repos.",
+			"",
+			"Current: "+w.p.ProjectsDir,
+		)
 
 	case "leader":
-		lines = append(lines, "Info: Leader", "")
-		lines = append(lines, "Leader prefixes shortcuts in many Neovim setups.")
-		lines = append(lines, "Space is a common choice.")
-		lines = append(lines, "", "Current: "+encodeKeyForUI(w.p.Leader))
+		lines = append(lines,
+			"Info: Leader",
+			"",
+			"Leader prefixes shortcuts in many Neovim setups.",
+			"Space is a common choice.",
+			"",
+			"Current: "+encodeKeyForUI(w.p.Leader),
+		)
 
 	case "local_leader":
-		lines = append(lines, "Info: Local leader", "")
-		lines = append(lines, "Local leader is used by some plugins for filetype specific shortcuts.")
-		lines = append(lines, "", "Current: "+encodeKeyForUI(w.p.LocalLeader))
+		lines = append(lines,
+			"Info: Local leader",
+			"",
+			"Local leader is used by some plugins for filetype-specific shortcuts.",
+			"",
+			"Current: "+encodeKeyForUI(w.p.LocalLeader),
+		)
 
 	case "verify":
-		lines = append(lines, "Info: Verify downloads", "")
-		lines = append(lines, "auto verifies when checksums are available")
-		lines = append(lines, "require fails if verification is not possible")
-		lines = append(lines, "off skips verification")
-		lines = append(lines, "", "Current: "+w.p.Verify)
+		lines = append(lines,
+			"Info: Verify downloads",
+			"",
+			"auto verifies when checksums are available.",
+			"require fails if verification is not possible.",
+			"off skips verification.",
+			"",
+			"Current: "+w.p.Verify,
+		)
 
 	default:
 		w.updateSettingsInfo()

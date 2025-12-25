@@ -7,29 +7,33 @@ func (w *Wizard) updateSettingsInfo() {
 		return
 	}
 
-	pr, ok := w.cat.Presets[w.p.Preset]
-	presetTitle := w.p.Preset
-	presetShort := ""
-	if ok {
-		presetTitle = pr.Title
-		presetShort = pr.Short
+	profileName := strings.TrimSpace(w.p.Name)
+	if profileName == "" {
+		profileName = "default"
 	}
 
-	target := strings.ToLower(strings.TrimSpace(w.p.Target))
-	if target != "safe" && target != "default" {
-		target = "safe"
+	presetID := strings.TrimSpace(w.p.Preset)
+	presetDisplay := presetID
+	presetDesc := ""
+	if pr, ok := w.cat.Presets[presetID]; ok {
+		if strings.TrimSpace(pr.Title) != "" {
+			presetDisplay = pr.Title
+		}
+		presetDesc = strings.TrimSpace(pr.Short)
 	}
 
 	lines := []string{}
-	lines = append(lines, "Preset: "+presetTitle)
-	if strings.TrimSpace(presetShort) != "" {
-		lines = append(lines, presetShort)
+	lines = append(lines, "Profile: "+profileName)
+	lines = append(lines, "Preset: "+presetDisplay)
+	if presetDesc != "" {
+		lines = append(lines, presetDesc)
 	}
-
 	lines = append(lines, "")
+
+	target := strings.ToLower(strings.TrimSpace(w.p.Target))
 	if target == "safe" {
 		lines = append(lines, "Target: safe build")
-		lines = append(lines, "Build name: "+w.p.EffectiveAppName())
+		lines = append(lines, "Build name: "+strings.TrimSpace(w.p.AppName))
 		lines = append(lines, "")
 		lines = append(lines, "Launch:")
 		lines = append(lines, "  NVIM_APPNAME="+w.p.EffectiveAppName()+" nvim")
@@ -37,38 +41,23 @@ func (w *Wizard) updateSettingsInfo() {
 		lines = append(lines, "Config mode: managed")
 		lines = append(lines, "Safe builds always use a separate config directory.")
 	} else {
-		lines = append(lines, "Target: system config (~/.config/nvim)")
+		lines = append(lines, "Target: system config")
 		lines = append(lines, "")
-		lines = append(lines, "Config mode: "+w.p.ConfigMode)
-		if w.p.ConfigMode == "integrate" {
-			lines = append(lines, "Integrate means you must require nvimwiz.loader from your own init.lua")
-		} else {
-			lines = append(lines, "Managed means nvimwiz writes ~/.config/nvim/init.lua")
-		}
+		lines = append(lines, "Launch:")
+		lines = append(lines, "  nvim")
+		lines = append(lines, "")
+		lines = append(lines, "Config mode: "+strings.TrimSpace(w.p.ConfigMode))
+		lines = append(lines, "System config writes to ~/.config/nvim")
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, "Verify downloads: "+w.p.Verify)
+	lines = append(lines, "Verify downloads: "+strings.TrimSpace(w.p.Verify))
 	lines = append(lines, "")
-	lines = append(lines, "Projects dir: "+w.p.ProjectsDir)
+	lines = append(lines, "Projects dir: "+strings.TrimSpace(w.p.ProjectsDir))
 	lines = append(lines, "Leader: "+encodeKeyForUI(w.p.Leader))
 	lines = append(lines, "Local leader: "+encodeKeyForUI(w.p.LocalLeader))
+	lines = append(lines, "")
+	lines = append(lines, "Tip: select a setting to see details.")
 
 	w.settingsInfo.SetText(strings.Join(lines, "\n"))
-}
-
-func encodeKeyForUI(key string) string {
-	if key == "" {
-		return "(empty)"
-	}
-	if key == " " {
-		return "(space)"
-	}
-	if key == "\t" {
-		return "(tab)"
-	}
-	if key == "\n" {
-		return "(enter)"
-	}
-	return key
 }
