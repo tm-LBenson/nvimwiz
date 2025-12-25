@@ -11,6 +11,7 @@ func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 	if profileName == "" {
 		profileName = "default"
 	}
+
 	target := strings.ToLower(strings.TrimSpace(w.p.Target))
 
 	lines := []string{}
@@ -19,18 +20,33 @@ func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 		lines = append(lines,
 			"Info: Profile",
 			"",
-			"Profiles are saved sets of settings and feature choices.",
-			"Use multiple profiles to keep different Neovim builds or workflows.",
+			"A profile is a saved set of settings, feature toggles, and UI choices.",
+			"Use profiles when you want multiple Neovim setups (work vs personal, minimal vs full IDE, etc).",
+			"",
+			"What this affects:",
+			"- settings on this page",
+			"- features/choices on the next page",
+			"- where your config is written (safe build vs system config)",
 			"",
 			"Current: "+profileName,
+			"",
+			"Tip: use the Profiles button to create/clone/rename/delete profiles.",
 		)
 
 	case "target":
 		lines = append(lines,
 			"Info: Target",
 			"",
-			"safe build writes to ~/.config/<build name> and does not touch ~/.config/nvim.",
-			"system config writes to your normal ~/.config/nvim.",
+			"Target controls where nvimwiz writes your Neovim config.",
+			"",
+			"safe build (recommended):",
+			"- writes to ~/.config/<build name>",
+			"- never touches your existing ~/.config/nvim",
+			"- launch with: NVIM_APPNAME=<build name> nvim",
+			"",
+			"system config:",
+			"- writes to your normal ~/.config/nvim",
+			"- launch with: nvim",
 			"",
 			"Current: "+target,
 		)
@@ -39,68 +55,90 @@ func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 		lines = append(lines,
 			"Info: Build name",
 			"",
-			"Used for safe builds only.",
-			"This becomes the folder name under ~/.config.",
+			"Build name is used for safe builds only.",
+			"It becomes the folder name under ~/.config and the NVIM_APPNAME value.",
 			"",
 			"Build name: "+strings.TrimSpace(w.p.AppName),
 			"Effective app name: "+w.p.EffectiveAppName(),
-			"",
-			"Launch:",
-			"  NVIM_APPNAME="+w.p.EffectiveAppName()+" nvim",
 		)
+		if target == "safe" {
+			lines = append(lines,
+				"",
+				"Launch:",
+				"  NVIM_APPNAME="+w.p.EffectiveAppName()+" nvim",
+				"",
+				"Why this exists:",
+				"- you can try nvimwiz without breaking your current setup",
+				"- you can keep multiple builds side-by-side",
+			)
+		}
 
 	case "preset":
 		presetID := strings.TrimSpace(w.p.Preset)
-		presetDisplay := presetID
-		presetDesc := ""
-		if pr, ok := w.cat.Presets[presetID]; ok {
+		pr, ok := w.cat.Presets[presetID]
+		name := presetID
+		desc := ""
+		if ok {
 			if strings.TrimSpace(pr.Title) != "" {
-				presetDisplay = pr.Title
+				name = pr.Title
 			}
-			presetDesc = strings.TrimSpace(pr.Short)
+			desc = strings.TrimSpace(pr.Short)
 		}
-
 		lines = append(lines,
 			"Info: Preset",
 			"",
-			"A preset is a curated baseline of defaults and features.",
-			"Pick one to start from a known working setup, then customize features.",
+			"A preset is a curated starting point. It sets a recommended baseline of features and UI choices.",
+			"You can still customize everything after selecting a preset.",
 			"",
-			"Current: "+presetDisplay,
+			"Current: "+name,
 		)
-		if presetDesc != "" {
-			lines = append(lines, presetDesc)
+		if desc != "" {
+			lines = append(lines, "", desc)
 		}
+		lines = append(lines,
+			"",
+			"How to use presets:",
+			"- pick the closest vibe (minimal vs IDE-like)",
+			"- then go to Features to toggle what you want",
+		)
 
 	case "config_mode":
 		lines = append(lines,
 			"Info: Config mode",
 			"",
-			"managed means nvimwiz writes init.lua and generated modules for you.",
-			"integrate means you keep your init.lua and add a small loader require.",
+			"managed:",
+			"- nvimwiz owns init.lua and generated modules",
+			"- easiest for a fresh setup",
 			"",
-			"Current: "+w.p.ConfigMode,
+			"integrate:",
+			"- you keep your init.lua",
+			"- you add a small require to load nvimwiz modules",
+			"- best when you already have a config you want to keep",
+			"",
+			"Current: "+strings.TrimSpace(w.p.ConfigMode),
 		)
 		if target == "safe" {
-			lines = append(lines, "", "Note: safe builds are always managed.")
+			lines = append(lines, "", "Note: safe builds always use managed mode.")
 		}
 
 	case "projects_dir":
 		lines = append(lines,
 			"Info: Projects dir",
 			"",
-			"Used by the start screen and pickers to list your projects.",
-			"Point it at the folder where you keep your repos.",
+			"This directory is used by the dashboard and pickers to show your projects.",
+			"Set it to where you keep your git repos (for example: ~/projects).",
 			"",
-			"Current: "+w.p.ProjectsDir,
+			"Current: "+strings.TrimSpace(w.p.ProjectsDir),
 		)
 
 	case "leader":
 		lines = append(lines,
 			"Info: Leader",
 			"",
-			"Leader prefixes shortcuts in many Neovim setups.",
-			"Space is a common choice.",
+			"Leader is a special key used as a prefix for shortcuts (keymaps).",
+			"Many Neovim configs use <leader>something for commands.",
+			"",
+			"Common choice: Space",
 			"",
 			"Current: "+encodeKeyForUI(w.p.Leader),
 		)
@@ -109,7 +147,8 @@ func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 		lines = append(lines,
 			"Info: Local leader",
 			"",
-			"Local leader is used by some plugins for filetype-specific shortcuts.",
+			"Local leader is another prefix key used by some plugins for filetype-specific shortcuts.",
+			"If you are new, keeping it as Space is totally fine.",
 			"",
 			"Current: "+encodeKeyForUI(w.p.LocalLeader),
 		)
@@ -118,11 +157,18 @@ func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 		lines = append(lines,
 			"Info: Verify downloads",
 			"",
-			"auto verifies when checksums are available.",
-			"require fails if verification is not possible.",
-			"off skips verification.",
+			"nvimwiz can verify downloaded archives when a checksum is available.",
 			"",
-			"Current: "+w.p.Verify,
+			"auto:",
+			"- verify when possible; otherwise continue",
+			"",
+			"require:",
+			"- fail if verification is not possible",
+			"",
+			"off:",
+			"- skip verification",
+			"",
+			"Current: "+strings.TrimSpace(w.p.Verify),
 		)
 
 	default:

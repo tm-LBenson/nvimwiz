@@ -13,20 +13,20 @@ func (w *Wizard) updateSettingsInfo() {
 	}
 
 	presetID := strings.TrimSpace(w.p.Preset)
-	presetDisplay := presetID
-	presetDesc := ""
+	presetTitle := presetID
+	presetShort := ""
 	if pr, ok := w.cat.Presets[presetID]; ok {
 		if strings.TrimSpace(pr.Title) != "" {
-			presetDisplay = pr.Title
+			presetTitle = pr.Title
 		}
-		presetDesc = strings.TrimSpace(pr.Short)
+		presetShort = strings.TrimSpace(pr.Short)
 	}
 
 	lines := []string{}
 	lines = append(lines, "Profile: "+profileName)
-	lines = append(lines, "Preset: "+presetDisplay)
-	if presetDesc != "" {
-		lines = append(lines, presetDesc)
+	lines = append(lines, "Preset: "+presetTitle)
+	if presetShort != "" {
+		lines = append(lines, presetShort)
 	}
 	lines = append(lines, "")
 
@@ -57,7 +57,7 @@ func (w *Wizard) updateSettingsInfo() {
 	lines = append(lines, "Leader: "+encodeKeyForUI(w.p.Leader))
 	lines = append(lines, "Local leader: "+encodeKeyForUI(w.p.LocalLeader))
 	lines = append(lines, "")
-	lines = append(lines, "Tip: select a setting to see details.")
+	lines = append(lines, "Tip: select a setting to see details. Use Profiles to manage saved setups.")
 
 	w.settingsInfo.SetText(strings.Join(lines, "\n"))
 }
