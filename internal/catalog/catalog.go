@@ -22,12 +22,13 @@ type ChoiceOption struct {
 }
 
 type Choice struct {
-	Key     string
-	Title   string
-	Short   string
-	Long    string
-	Options []ChoiceOption
-	Default string
+	Key      string
+	Category string
+	Title    string
+	Short    string
+	Long     string
+	Options  []ChoiceOption
+	Default  string
 }
 
 type Preset struct {
@@ -506,9 +507,10 @@ Repo
 
 	choices := []Choice{
 		{
-			Key:   "ui.theme",
-			Title: "Theme",
-			Short: "Pick a colorscheme.",
+			Key:      "ui.theme",
+			Category: "UI",
+			Title:    "Theme",
+			Short:    "Pick a colorscheme.",
 			Long: `What it controls
 - The colorscheme used by Neovim.
 
@@ -606,9 +608,10 @@ Tradeoffs
 			},
 		},
 		{
-			Key:   "ui.explorer",
-			Title: "File explorer",
-			Short: "Pick a file tree / explorer UI.",
+			Key:      "ui.explorer",
+			Category: "UI",
+			Title:    "File explorer",
+			Short:    "Pick a file tree / explorer UI.",
 			Long: `What it controls
 - How you browse and open files from inside Neovim.
 
@@ -671,9 +674,10 @@ Tip
 			},
 		},
 		{
-			Key:   "ui.statusline",
-			Title: "Status line",
-			Short: "Pick a status line plugin.",
+			Key:      "ui.statusline",
+			Category: "UI",
+			Title:    "Status line",
+			Short:    "Pick a status line plugin.",
 			Long: `What it controls
 - The information bar at the bottom of the Neovim window.
 
