@@ -506,6 +506,60 @@ Repo
 	}
 
 	choices := []Choice{
+
+		{
+			Key:      "core.linenumbers",
+			Category: "Core",
+			Title:    "Line numbers",
+			Short:    "Absolute, relative, or off.",
+			Long: `What it controls
+- The line numbers shown on the left side of the editor.
+
+Modes
+- Absolute: shows real line numbers (like VS Code).
+- Relative: shows distance from the cursor (helpful for Vim motions like 5j, 3k).
+- Off: hides line numbers.
+
+Tip
+- If you're brand new to Vim motions, start with Absolute and switch to Relative later.`,
+			Default: "relative",
+			Options: []ChoiceOption{
+				{
+					ID:    "absolute",
+					Title: "Absolute",
+					Short: "Like VS Code: 1, 2, 3...",
+					Long: `Feels familiar
+- Matches VS Code default line numbers.
+
+Tradeoffs
+- You lose the “distance” hint that makes Vim motions faster.`,
+					Modules: []string{},
+				},
+				{
+					ID:    "relative",
+					Title: "Relative",
+					Short: "Shows distance from cursor.",
+					Long: `Why pick it
+- Helps with motions: 5j means “move down 5 lines”.
+- Many Vim users prefer it once comfortable.
+
+Tip
+- The current line still shows its absolute number.`,
+					Modules: []string{},
+				},
+				{
+					ID:    "off",
+					Title: "Off",
+					Short: "Hide line numbers.",
+					Long: `Why pick it
+- Minimal UI.
+
+Tradeoffs
+- Some motions and debugging are harder without numbers.`,
+					Modules: []string{},
+				},
+			},
+		},
 		{
 			Key:      "ui.theme",
 			Category: "UI",

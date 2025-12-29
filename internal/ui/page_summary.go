@@ -52,7 +52,7 @@ func (w *Wizard) renderSummary() {
 	lines = append(lines, "")
 
 	lines = append(lines, "Choices:")
-	for _, k := range []string{"ui.explorer", "ui.theme", "ui.statusline"} {
+	for _, k := range []string{"core.linenumbers", "ui.explorer", "ui.theme", "ui.statusline"} {
 		v := w.p.Choices[k]
 		if v == "" {
 			continue

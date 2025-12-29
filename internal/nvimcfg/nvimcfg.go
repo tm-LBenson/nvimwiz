@@ -154,6 +154,9 @@ func buildConfigLua(p profile.Profile, cat catalog.Catalog) (string, error) {
 		if key == "ui.statusline" {
 			choices["statusline"] = optID
 		}
+		if key == "core.linenumbers" {
+			choices["line_numbers"] = optID
+		}
 
 		for _, mod := range opt.Modules {
 			modules = append(modules, mod)
@@ -184,7 +187,7 @@ func buildConfigLua(p profile.Profile, cat catalog.Catalog) (string, error) {
 	b.WriteString("\tlocalleader = " + luaString(p.LocalLeader) + ",\n")
 	b.WriteString("\tprojects_dir = " + luaString(projectsDir) + ",\n")
 	b.WriteString("\tchoices = {\n")
-	for _, key := range []string{"explorer", "theme", "statusline"} {
+	for _, key := range []string{"explorer", "theme", "statusline", "line_numbers"} {
 		val := choices[key]
 		if val == "" {
 			continue

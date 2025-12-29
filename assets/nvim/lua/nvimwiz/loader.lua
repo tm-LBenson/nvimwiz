@@ -7,8 +7,22 @@ vim.g.mapleader = cfg.leader or " "
 vim.g.maplocalleader = cfg.localleader or " "
 
 vim.opt.termguicolors = true
-vim.opt.number = true
-vim.opt.relativenumber = true
+
+local ln = "relative"
+if type(cfg.choices) == "table" and type(cfg.choices.line_numbers) == "string" then
+	ln = cfg.choices.line_numbers
+end
+
+if ln == "absolute" then
+	vim.opt.number = true
+	vim.opt.relativenumber = false
+elseif ln == "off" then
+	vim.opt.number = false
+	vim.opt.relativenumber = false
+else
+	vim.opt.number = true
+	vim.opt.relativenumber = true
+end
 vim.opt.expandtab = true
 vim.opt.shiftwidth = 2
 vim.opt.tabstop = 2
