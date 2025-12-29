@@ -29,6 +29,7 @@ type itemRef struct {
 type Wizard struct {
 	app   *tview.Application
 	pages *tview.Pages
+	applyButtons *tview.Pages
 
 	cat catalog.Catalog
 	p   profile.Profile
@@ -57,6 +58,9 @@ type Wizard struct {
 	summaryView  *tview.TextView
 
 	taskPlan []tasks.Task
+
+	taskState        *tasks.State
+	applyFailedIndex int
 }
 
 func New(app *tview.Application) (*Wizard, error) {
@@ -71,12 +75,14 @@ func New(app *tview.Application) (*Wizard, error) {
 		note = "Added " + lb + " to PATH for this run"
 	}
 	w := &Wizard{
-		app:     app,
-		pages:   tview.NewPages(),
-		cat:     cat,
-		p:       p,
-		sys:     sysinfo.Collect(),
-		envNote: note,
+		app:              app,
+		pages:            tview.NewPages(),
+		cat:              cat,
+		p:                p,
+		sys:              sysinfo.Collect(),
+		envNote:          note,
+		installStatus:    map[string]install.ToolStatus{},
+		applyFailedIndex: -1,
 	}
 	return w, nil
 }
@@ -103,9 +109,6 @@ func (w *Wizard) Run() error {
 func (w *Wizard) gotoPage(name string) {
 	if name == "summary" {
 		w.renderSummary()
-	}
-	if name == "features" && w.currentCategory == "Install" {
-		w.refreshInstallStatusAsync()
 	}
 	w.pages.SwitchToPage(name)
 }

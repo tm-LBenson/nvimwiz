@@ -126,10 +126,19 @@ func Plan(p profile.Profile, cat catalog.Catalog) []Task {
 	return plan
 }
 
-func RunAll(ctx context.Context, plan []Task, log func(string), progress func(done, total int)) error {
-	st := &State{}
+func RunFrom(ctx context.Context, plan []Task, st *State, start int, log func(string), progress func(done, total int)) (*State, int, error) {
+	if st == nil {
+		st = &State{}
+	}
 	total := len(plan)
-	for i, t := range plan {
+	if start < 0 {
+		start = 0
+	}
+	if start > total {
+		start = total
+	}
+	for i := start; i < total; i++ {
+		t := plan[i]
 		if log != nil {
 			log("== " + t.Name + " ==")
 		}
@@ -137,11 +146,16 @@ func RunAll(ctx context.Context, plan []Task, log func(string), progress func(do
 			if log != nil {
 				log("Error: " + err.Error())
 			}
-			return err
+			return st, i, err
 		}
 		if progress != nil {
 			progress(i+1, total)
 		}
 	}
-	return nil
+	return st, -1, nil
+}
+
+func RunAll(ctx context.Context, plan []Task, log func(string), progress func(done, total int)) error {
+	_, _, err := RunFrom(ctx, plan, nil, 0, log, progress)
+	return err
 }
