@@ -158,6 +158,7 @@ func (w *Wizard) startApplyFrom(startIndex int, reset bool) {
 					fmt.Fprintln(w.logView, "")
 					fmt.Fprintln(w.logView, "Integrate mode: add require(\"nvimwiz.loader\") to your init.lua")
 				}
+				w.showNextSteps()
 			}
 			w.logView.ScrollToEnd()
 		})
