@@ -18,7 +18,7 @@ func InstallRipgrep(ctx context.Context, verify string, log func(string)) (strin
 	}
 
 	latest := normalizeVersion(rel.TagName)
-	if cur, path, ok := installedCommandVersion("rg", "--version"); ok && cur == latest {
+	if cur, path, ok := installedCommandVersion(ctx, "rg", "--version"); ok && cur == latest {
 		if log != nil {
 			log("ripgrep already up-to-date (" + rel.TagName + "), skipping")
 		}

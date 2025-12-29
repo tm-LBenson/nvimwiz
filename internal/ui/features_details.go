@@ -77,11 +77,11 @@ func beginnerNote(id, title string) string {
 	case strings.Contains(low, "toggleterm") || strings.Contains(low, "terminal"):
 		return "Adds an integrated terminal you can toggle from Neovim (bottom split), similar to VS Code's terminal.\n\nKey: <leader>tt toggles. In terminal mode, press <esc><esc> to return to normal mode."
 	case strings.Contains(low, "ripgrep") || strings.Contains(low, " rg"):
-		return "ripgrep (rg) is a very fast search tool. Many Neovim search features use it under the hood.\n\nInstall/Update will only download if you are missing rg or are not on the latest release."
+		return "ripgrep (rg) is a very fast search tool. Many Neovim search features use it under the hood."
 	case strings.Contains(low, "fd"):
-		return "fd is a faster, friendlier 'find' command. Plugins use it to list files quickly.\n\nInstall/Update will only download if you are missing fd or are not on the latest release."
+		return "fd is a faster, friendlier 'find' command. Plugins use it to list files quickly."
 	case strings.Contains(low, "neovim") || strings.Contains(low, "nvim"):
-		return "This is the editor itself. Installing a stable version avoids random breakage from old distro packages.\n\nInstall/Update will check your current Neovim version and skip downloading if you are already on the latest release."
+		return "This is the editor itself. Installing a stable version avoids random breakage from old distro packages."
 	case strings.Contains(low, "statusline"):
 		return "A statusline shows mode, file info, git branch, diagnostics, and more at the bottom of the screen."
 	case strings.Contains(low, "theme") || strings.Contains(low, "colorscheme"):

@@ -1,30 +1,34 @@
 package install
 
 import (
+	"context"
 	"os/exec"
 	"strings"
+	"time"
 )
 
-// normalizeVersion turns common version strings into something comparable.
-//
-// Examples:
-//   - "v0.11.5" -> "0.11.5"
-//   - "0.11.5"  -> "0.11.5"
 func normalizeVersion(v string) string {
 	v = strings.TrimSpace(v)
 	v = strings.TrimPrefix(v, "v")
 	return v
 }
 
-// installedCommandVersion tries to resolve a command in PATH and parse its version.
-// It returns the normalized version, resolved path, and ok.
-func installedCommandVersion(command string, args ...string) (version string, path string, ok bool) {
+func installedCommandVersion(ctx context.Context, command string, args ...string) (version string, path string, ok bool) {
 	path, err := exec.LookPath(command)
 	if err != nil {
 		return "", "", false
 	}
 
-	cmd := exec.Command(path, args...)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, has := ctx.Deadline(); !has {
+		cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		ctx = cctx
+	}
+
+	cmd := exec.CommandContext(ctx, path, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", path, false

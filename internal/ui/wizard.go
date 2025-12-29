@@ -1,11 +1,14 @@
 package ui
 
 import (
+	"time"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
 	"nvimwiz/internal/catalog"
 	"nvimwiz/internal/env"
+	"nvimwiz/internal/install"
 	"nvimwiz/internal/profile"
 	"nvimwiz/internal/sysinfo"
 	"nvimwiz/internal/tasks"
@@ -44,6 +47,10 @@ type Wizard struct {
 
 	currentCategory string
 	rowItems        []itemRef
+
+	installStatus        map[string]install.ToolStatus
+	installStatusLast    time.Time
+	installStatusRunning bool
 
 	logView      *tview.TextView
 	progressView *tview.TextView
@@ -96,6 +103,9 @@ func (w *Wizard) Run() error {
 func (w *Wizard) gotoPage(name string) {
 	if name == "summary" {
 		w.renderSummary()
+	}
+	if name == "features" && w.currentCategory == "Install" {
+		w.refreshInstallStatusAsync()
 	}
 	w.pages.SwitchToPage(name)
 }

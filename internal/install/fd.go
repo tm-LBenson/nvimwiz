@@ -18,7 +18,7 @@ func InstallFd(ctx context.Context, verify string, log func(string)) (string, er
 	}
 
 	latest := normalizeVersion(rel.TagName)
-	if cur, path, ok := installedCommandVersion("fd", "--version"); ok && cur == latest {
+	if cur, path, ok := installedCommandVersion(ctx, "fd", "--version"); ok && cur == latest {
 		if log != nil {
 			log("fd already up-to-date (" + rel.TagName + "), skipping")
 		}

@@ -114,10 +114,14 @@ func (w *Wizard) pickerOptions(it itemRef) ([]string, int) {
 
 	on := w.p.Features[it.ID]
 	if strings.EqualFold(w.currentCategory, "Install") {
-		if on {
-			return []string{"Install/Update", "Skip"}, 0
+		primary := "Install"
+		if installToolPresent(it.ID) {
+			primary = "Update"
 		}
-		return []string{"Install/Update", "Skip"}, 1
+		if on {
+			return []string{primary, "Skip"}, 0
+		}
+		return []string{primary, "Skip"}, 1
 	}
 
 	if on {
@@ -145,7 +149,7 @@ func (w *Wizard) applyPickerSelection(it itemRef, picked string) {
 	}
 
 	if strings.EqualFold(w.currentCategory, "Install") {
-		w.p.Features[it.ID] = picked == "Install/Update"
+		w.p.Features[it.ID] = picked != "Skip"
 	} else {
 		w.p.Features[it.ID] = picked == "Enable"
 	}

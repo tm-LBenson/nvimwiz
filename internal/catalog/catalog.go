@@ -66,7 +66,7 @@ Why you want it
 
 How to verify
 - Run: nvim --version
-- The wizard also detects the version and will skip if you're already up to date.`,
+`,
 			Default: true,
 			Modules: []string{"install/neovim"},
 		},

@@ -130,10 +130,13 @@ func (w *Wizard) itemActionLabel(it itemRef) string {
 
 	on := w.p.Features[it.ID]
 	if strings.EqualFold(w.currentCategory, "Install") {
-		if on {
-			return "Install/Update"
+		if !on {
+			return "Skip"
 		}
-		return "Skip"
+		if installToolPresent(it.ID) {
+			return "Update"
+		}
+		return "Install"
 	}
 
 	if on {

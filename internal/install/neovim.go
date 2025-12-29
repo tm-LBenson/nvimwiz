@@ -19,7 +19,7 @@ func InstallNeovim(ctx context.Context, verify string, log func(string)) (string
 	}
 
 	latest := normalizeVersion(rel.TagName)
-	if cur, path, ok := installedCommandVersion("nvim", "--version"); ok && cur == latest {
+	if cur, path, ok := installedCommandVersion(ctx, "nvim", "--version"); ok && cur == latest {
 		if log != nil {
 			log("Neovim already up to date (" + rel.TagName + "), skipping download")
 		}

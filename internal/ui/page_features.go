@@ -49,6 +49,9 @@ func (w *Wizard) pageFeatures() tview.Primitive {
 		w.pages.RemovePage("picker")
 		w.currentCategory = categoryNames[col]
 		w.renderFeatureTable()
+		if w.currentCategory == "Install" {
+			w.refreshInstallStatusAsync()
+		}
 	})
 
 	w.featureTable = tview.NewTable()
@@ -185,6 +188,9 @@ func (w *Wizard) pageFeatures() tview.Primitive {
 	})
 
 	w.renderFeatureTable()
+	if w.currentCategory == "Install" {
+		w.refreshInstallStatusAsync()
+	}
 
 	buttons := tview.NewForm()
 	buttons.AddButton("Back", func() { w.gotoPage("settings") })
