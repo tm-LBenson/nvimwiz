@@ -1,6 +1,11 @@
 package ui
 
-import "strings"
+import (
+	"sort"
+	"strings"
+
+	"nvimwiz/internal/profile"
+)
 
 func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 	if w.settingsInfo == nil {
@@ -74,33 +79,7 @@ func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 		}
 
 	case "preset":
-		presetID := strings.TrimSpace(w.p.Preset)
-		pr, ok := w.cat.Presets[presetID]
-		name := presetID
-		desc := ""
-		if ok {
-			if strings.TrimSpace(pr.Title) != "" {
-				name = pr.Title
-			}
-			desc = strings.TrimSpace(pr.Short)
-		}
-		lines = append(lines,
-			"Info: Preset",
-			"",
-			"A preset is a curated starting point. It sets a recommended baseline of features and UI choices.",
-			"You can still customize everything after selecting a preset.",
-			"",
-			"Current: "+name,
-		)
-		if desc != "" {
-			lines = append(lines, "", desc)
-		}
-		lines = append(lines,
-			"",
-			"How to use presets:",
-			"- pick the closest vibe (minimal vs IDE-like)",
-			"- then go to Features to toggle what you want",
-		)
+		lines = append(lines, w.presetHelp()...)
 
 	case "config_mode":
 		lines = append(lines,
@@ -178,4 +157,171 @@ func (w *Wizard) showSettingsFieldHelp(fieldKey string) {
 
 	lines = append(lines, "", "Press Save to return to summary.")
 	w.settingsInfo.SetText(strings.Join(lines, "\n"))
+}
+
+func (w *Wizard) presetHelp() []string {
+	presetID := strings.TrimSpace(w.p.Preset)
+	pr, ok := w.cat.Presets[presetID]
+
+	title := presetID
+	if ok {
+		if strings.TrimSpace(pr.Title) != "" {
+			title = pr.Title
+		}
+	}
+
+	lines := []string{}
+	lines = append(lines,
+		"Info: Preset",
+		"",
+		"A preset is a curated starting point. It sets a recommended baseline of features and UI choices.",
+		"You can still customize everything after selecting a preset.",
+		"",
+		"Current: "+title,
+	)
+
+	if !ok {
+		lines = append(lines,
+			"",
+			"This preset is not known in the current catalog.",
+		)
+		return lines
+	}
+
+	if s := strings.TrimSpace(pr.Short); s != "" {
+		lines = append(lines, "", s)
+	}
+
+	if s := strings.TrimSpace(pr.ModeledAfter); s != "" {
+		lines = append(lines, "", "Modeled after: "+s)
+	}
+
+	links := []string{}
+	for _, link := range pr.Links {
+		link = strings.TrimSpace(link)
+		if link == "" {
+			continue
+		}
+		links = append(links, link)
+	}
+	if len(links) > 0 {
+		lines = append(lines, "", "Links:")
+		for _, link := range links {
+			lines = append(lines, "- "+link)
+		}
+	}
+
+	if s := strings.TrimSpace(pr.Audience); s != "" {
+		lines = append(lines, "", "Intended audience:")
+		for _, l := range splitNonEmptyLines(s) {
+			lines = append(lines, l)
+		}
+	}
+
+	base := profile.Default(w.cat)
+	base.Preset = presetID
+	for id, enabled := range pr.Features {
+		base.Features[id] = enabled
+	}
+	for key, val := range pr.Choices {
+		base.Choices[key] = val
+	}
+	base.Normalize(w.cat)
+
+	catTitles := map[string][]string{}
+	for featureID, enabled := range base.Features {
+		if !enabled {
+			continue
+		}
+		f, ok := w.cat.Features[featureID]
+		if !ok {
+			continue
+		}
+		catTitles[f.Category] = append(catTitles[f.Category], f.Title)
+	}
+
+	lines = append(lines, "", "Defaults:")
+
+	knownCats := map[string]bool{}
+	for _, c := range w.cat.Categories {
+		knownCats[c] = true
+		vals := catTitles[c]
+		if len(vals) == 0 {
+			continue
+		}
+		sort.Strings(vals)
+		lines = append(lines, "- "+c+": "+strings.Join(vals, ", "))
+	}
+
+	extraCats := []string{}
+	for c := range catTitles {
+		if knownCats[c] {
+			continue
+		}
+		extraCats = append(extraCats, c)
+	}
+	sort.Strings(extraCats)
+	for _, c := range extraCats {
+		vals := catTitles[c]
+		if len(vals) == 0 {
+			continue
+		}
+		sort.Strings(vals)
+		lines = append(lines, "- "+c+": "+strings.Join(vals, ", "))
+	}
+
+	choiceKeys := make([]string, 0, len(w.cat.Choices))
+	for key := range w.cat.Choices {
+		choiceKeys = append(choiceKeys, key)
+	}
+	sort.SliceStable(choiceKeys, func(i, j int) bool {
+		return w.cat.Choices[choiceKeys[i]].Title < w.cat.Choices[choiceKeys[j]].Title
+	})
+
+	if len(choiceKeys) > 0 {
+		lines = append(lines, "", "UI choices:")
+	}
+	for _, key := range choiceKeys {
+		ch, ok := w.cat.Choices[key]
+		if !ok {
+			continue
+		}
+		optID := strings.TrimSpace(base.Choices[key])
+		optTitle := optID
+		for _, opt := range ch.Options {
+			if opt.ID == optID {
+				optTitle = opt.Title
+				break
+			}
+		}
+		lines = append(lines, "- "+ch.Title+": "+optTitle)
+	}
+
+	if s := strings.TrimSpace(pr.Tradeoffs); s != "" {
+		lines = append(lines, "", "Tradeoffs:")
+		for _, l := range splitNonEmptyLines(s) {
+			lines = append(lines, l)
+		}
+	}
+
+	lines = append(lines,
+		"",
+		"How to use presets:",
+		"- pick the closest vibe (minimal vs IDE-like)",
+		"- then go to Features to toggle what you want",
+	)
+	return lines
+}
+
+func splitNonEmptyLines(s string) []string {
+	out := []string{}
+	for _, l := range strings.Split(s, "\n") {
+		l = strings.TrimRight(l, "\r")
+		l = strings.TrimSpace(l)
+		if l == "" {
+			continue
+		}
+		out = append(out, l)
+	}
+	return out
 }

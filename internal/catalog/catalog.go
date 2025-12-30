@@ -32,11 +32,15 @@ type Choice struct {
 }
 
 type Preset struct {
-	ID       string
-	Title    string
-	Short    string
-	Features map[string]bool
-	Choices  map[string]string
+	ID           string
+	Title        string
+	Short        string
+	ModeledAfter string
+	Links        []string
+	Audience     string
+	Tradeoffs    string
+	Features     map[string]bool
+	Choices      map[string]string
 }
 
 type Catalog struct {
@@ -767,16 +771,17 @@ Repo
 
 	presets := []Preset{
 		{
-			ID:    "kickstart",
-			Title: "Kickstart-like",
-			Short: `Who it's for
-- Beginners who want a minimal, understandable starting point.
+			ID:           "kickstart",
+			Title:        "Kickstart-like",
+			Short:        "Minimal, beginner-friendly baseline.",
+			ModeledAfter: "kickstart.nvim",
+			Links: []string{
+				"https://github.com/nvim-lua/kickstart.nvim",
+			},
+			Audience: `Beginners who want a minimal, understandable starting point.`,
+			Tradeoffs: `Fewer plugins enabled out of the box.
 
-What it feels like
-- Small set of core tools (LSP + Telescope) with a clean baseline.
-
-Upstream inspiration
-- https://github.com/nvim-lua/kickstart.nvim`,
+Great if you want to learn what each piece does, but you may add extras later.`,
 			Features: map[string]bool{
 				"core.dashboard":  true,
 				"core.telescope":  true,
@@ -793,17 +798,17 @@ Upstream inspiration
 			},
 		},
 		{
-			ID:    "lazyvim",
-			Title: "LazyVim-like",
-			Short: `Who it's for
-- Users who want a more "IDE-like" default without doing a lot of setup.
+			ID:           "lazyvim",
+			Title:        "LazyVim-like",
+			Short:        "IDE-like baseline with common quality-of-life extras.",
+			ModeledAfter: "LazyVim",
+			Links: []string{
+				"https://github.com/LazyVim/LazyVim",
+			},
+			Audience: `Users who want a more IDE-like default without doing a lot of setup.`,
+			Tradeoffs: `More defaults and plugin behavior.
 
-What it feels like
-- A solid baseline with common quality-of-life extras.
-- Great "first Neovim" preset.
-
-Upstream inspiration
-- https://github.com/LazyVim/LazyVim`,
+Feels great quickly, but there is more going on under the hood than a minimal preset.`,
 			Features: map[string]bool{
 				"core.dashboard":  true,
 				"core.telescope":  true,
@@ -822,16 +827,17 @@ Upstream inspiration
 			},
 		},
 		{
-			ID:    "astronvim",
-			Title: "AstroNvim-like",
-			Short: `Who it's for
-- Users who want a modular feel and strong UI defaults.
+			ID:           "astronvim",
+			Title:        "AstroNvim-like",
+			Short:        "Modular feel with strong UI defaults.",
+			ModeledAfter: "AstroNvim",
+			Links: []string{
+				"https://github.com/AstroNvim/AstroNvim",
+			},
+			Audience: `Users who want a modular feel and strong UI defaults.`,
+			Tradeoffs: `A bit more opinionated.
 
-What it feels like
-- A bit more opinionated and featureful.
-
-Upstream inspiration
-- https://github.com/AstroNvim/AstroNvim`,
+Great defaults, but you may want to tweak behavior as you learn what you like.`,
 			Features: map[string]bool{
 				"core.dashboard":  true,
 				"core.telescope":  true,
@@ -851,16 +857,17 @@ Upstream inspiration
 			},
 		},
 		{
-			ID:    "nvchad",
-			Title: "NvChad-like",
-			Short: `Who it's for
-- Users who want a fast, UI-forward Neovim experience.
+			ID:           "nvchad",
+			Title:        "NvChad-like",
+			Short:        "Fast, UI-forward, snappy experience.",
+			ModeledAfter: "NvChad",
+			Links: []string{
+				"https://github.com/NvChad/NvChad",
+			},
+			Audience: `Users who want a fast, UI-forward Neovim experience.`,
+			Tradeoffs: `Focuses on speed and UI polish.
 
-What it feels like
-- Snappy and polished.
-
-Upstream inspiration
-- https://github.com/NvChad/NvChad`,
+Some defaults may feel more opinionated than a minimal setup.`,
 			Features: map[string]bool{
 				"core.dashboard":  true,
 				"core.telescope":  true,
@@ -878,17 +885,17 @@ Upstream inspiration
 			},
 		},
 		{
-			ID:    "lunarvim",
-			Title: "LunarVim-like",
-			Short: `Who it's for
-- Users who want lots of features enabled out of the box.
+			ID:           "lunarvim",
+			Title:        "LunarVim-like",
+			Short:        "Batteries-included preset with more extras enabled.",
+			ModeledAfter: "LunarVim",
+			Links: []string{
+				"https://github.com/LunarVim/LunarVim",
+			},
+			Audience: `Users who want lots of features enabled out of the box.`,
+			Tradeoffs: `More plugins and more behavior.
 
-What it feels like
-- More plugins and more opinionated behavior.
-- Closer to a "batteries included" IDE.
-
-Upstream inspiration
-- https://github.com/LunarVim/LunarVim`,
+Great if you want an IDE feel immediately, but it can be a lot if you are brand new.`,
 			Features: map[string]bool{
 				"core.dashboard":  true,
 				"core.telescope":  true,

@@ -12,7 +12,11 @@ func (w *Wizard) systemInfoView() tview.Primitive {
 	tv.SetDynamicColors(true)
 	tv.SetBorder(true)
 	tv.SetTitle("System")
+	tv.SetText(w.systemInfoText())
+	return tv
+}
 
+func (w *Wizard) systemInfoText() string {
 	lines := []string{}
 
 	if strings.TrimSpace(w.envNote) != "" {
@@ -67,6 +71,5 @@ func (w *Wizard) systemInfoView() tview.Primitive {
 		lines = append(lines, "System info not available")
 	}
 
-	tv.SetText(strings.Join(lines, "\n"))
-	return tv
+	return strings.Join(lines, "\n")
 }
