@@ -1,4 +1,4 @@
-# nvimwiz (refactor)
+# nvimwiz
 
 A TUI wizard that installs Neovim + a few CLI tools (user-local) and writes a modular Neovim config driven by a profile JSON.
 
